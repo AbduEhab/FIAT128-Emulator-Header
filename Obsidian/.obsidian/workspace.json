@@ -11,8 +11,12 @@
             "id": "52f5230ae4d11973",
             "type": "leaf",
             "state": {
-              "type": "graph",
-              "state": {}
+              "type": "markdown",
+              "state": {
+                "file": "Arch - x128.md",
+                "mode": "source",
+                "source": false
+              }
             }
           },
           {
@@ -31,9 +35,11 @@
             "id": "1b5ae5a601ab4f7e",
             "type": "leaf",
             "state": {
-              "type": "kanban",
+              "type": "markdown",
               "state": {
-                "file": "Targets.md"
+                "file": "Arch - x128.md",
+                "mode": "source",
+                "source": false
               }
             }
           },
@@ -67,7 +73,7 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "Arch.md",
+                "file": "Arch - x128.md",
                 "mode": "source",
                 "source": false
               }
@@ -95,7 +101,8 @@
               }
             }
           }
-        ]
+        ],
+        "currentTab": 2
       }
     ],
     "direction": "vertical"
@@ -145,7 +152,7 @@
       }
     ],
     "direction": "horizontal",
-    "width": 300
+    "width": 317.5
   },
   "right": {
     "id": "2ed9ca3357ba9a25",
@@ -161,7 +168,7 @@
             "state": {
               "type": "backlink",
               "state": {
-                "file": "Targets.md",
+                "file": "Arch - x128.md",
                 "collapseAll": false,
                 "extraContext": false,
                 "sortOrder": "alphabetical",
@@ -178,7 +185,7 @@
             "state": {
               "type": "outgoing-link",
               "state": {
-                "file": "Targets.md",
+                "file": "Arch - x128.md",
                 "linksCollapsed": false,
                 "unlinkedCollapsed": true
               }
@@ -201,7 +208,7 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "Targets.md"
+                "file": "Arch - x128.md"
               }
             }
           }
@@ -212,15 +219,15 @@
     "width": 300,
     "collapsed": true
   },
-  "active": "52f5230ae4d11973",
+  "active": "1b5ae5a601ab4f7e",
   "lastOpenFiles": [
+    "Targets.md",
+    "Arch - x128.md",
+    "Modules/IO.md",
     "Specs.md",
-    "Arch.md",
     "Modules/Compiler.md",
     "Modules/Emulator.md",
     "Modules/Graphics.md",
-    "Modules/IO.md",
-    "Targets.md",
     "Untitled.md"
   ]
 }
