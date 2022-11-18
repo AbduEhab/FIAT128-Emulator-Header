@@ -35,11 +35,11 @@
 #include "Profiling/Timer.hpp"
 
 // define DEBUG macros here
-#ifdef DEBUG
+#ifdef DEBUG 
 
 #endif
 
-inline const int kCORE_COUNT = static_cast<int>(std::thread::hardware_concurrency());
+inline const int kCORE_COUNT = static_cast<int>(std::thread::hardware_concurrency());// cpu cores, multi-threading 
 
 #ifdef _WIN32
 
@@ -51,7 +51,7 @@ inline const int kCORE_COUNT = static_cast<int>(std::thread::hardware_concurrenc
 #include <windows.h>
 
 // inline const std::string BINARY_DIRECTORY(std::string(_getcwd(NULL, 0)) + '/');
-inline const std::string BINARY_DIRECTORY = std::filesystem::current_path().string();
+inline const std::string BINARY_DIRECTORY = std::filesystem::current_path().string();// for referencing any file
 
 #else
 
