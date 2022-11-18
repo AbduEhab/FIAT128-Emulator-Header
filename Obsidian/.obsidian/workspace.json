@@ -1,0 +1,226 @@
+{
+  "main": {
+    "id": "1b891efc1c4c4ef0",
+    "type": "split",
+    "children": [
+      {
+        "id": "5ac328b491d4845e",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "52f5230ae4d11973",
+            "type": "leaf",
+            "state": {
+              "type": "graph",
+              "state": {}
+            }
+          },
+          {
+            "id": "82dcf9b14096a806",
+            "type": "leaf",
+            "state": {
+              "type": "markdown",
+              "state": {
+                "file": "Modules/Emulator.md",
+                "mode": "source",
+                "source": false
+              }
+            }
+          },
+          {
+            "id": "1b5ae5a601ab4f7e",
+            "type": "leaf",
+            "state": {
+              "type": "kanban",
+              "state": {
+                "file": "Targets.md"
+              }
+            }
+          },
+          {
+            "id": "4a8066c326e4cf59",
+            "type": "leaf",
+            "state": {
+              "type": "markdown",
+              "state": {
+                "file": "Modules/IO.md",
+                "mode": "source",
+                "source": false
+              }
+            }
+          },
+          {
+            "id": "e94151eb63132bdd",
+            "type": "leaf",
+            "state": {
+              "type": "markdown",
+              "state": {
+                "file": "Modules/Compiler.md",
+                "mode": "source",
+                "source": false
+              }
+            }
+          },
+          {
+            "id": "744e0daee7dec4bf",
+            "type": "leaf",
+            "state": {
+              "type": "markdown",
+              "state": {
+                "file": "Arch.md",
+                "mode": "source",
+                "source": false
+              }
+            }
+          },
+          {
+            "id": "4c24406796d15c22",
+            "type": "leaf",
+            "state": {
+              "type": "markdown",
+              "state": {
+                "file": "Specs.md",
+                "mode": "source",
+                "source": false
+              }
+            }
+          },
+          {
+            "id": "ad3d3185001638a3",
+            "type": "leaf",
+            "state": {
+              "type": "kanban",
+              "state": {
+                "file": "Targets.md"
+              }
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "vertical"
+  },
+  "left": {
+    "id": "57018ea821703e4d",
+    "type": "split",
+    "children": [
+      {
+        "id": "5f3648150e434e87",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "345dc63df3620265",
+            "type": "leaf",
+            "state": {
+              "type": "file-explorer",
+              "state": {
+                "sortOrder": "alphabetical"
+              }
+            }
+          },
+          {
+            "id": "ea1ab12b07cb4a53",
+            "type": "leaf",
+            "state": {
+              "type": "search",
+              "state": {
+                "query": "",
+                "matchingCase": false,
+                "explainSearch": false,
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical"
+              }
+            }
+          },
+          {
+            "id": "7ef6abf92336f0ae",
+            "type": "leaf",
+            "state": {
+              "type": "starred",
+              "state": {}
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300
+  },
+  "right": {
+    "id": "2ed9ca3357ba9a25",
+    "type": "split",
+    "children": [
+      {
+        "id": "0e1cc476acce1db6",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "3686334b06dd79e3",
+            "type": "leaf",
+            "state": {
+              "type": "backlink",
+              "state": {
+                "file": "Targets.md",
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical",
+                "showSearch": false,
+                "searchQuery": "",
+                "backlinkCollapsed": false,
+                "unlinkedCollapsed": true
+              }
+            }
+          },
+          {
+            "id": "e0f1d85e4720d464",
+            "type": "leaf",
+            "state": {
+              "type": "outgoing-link",
+              "state": {
+                "file": "Targets.md",
+                "linksCollapsed": false,
+                "unlinkedCollapsed": true
+              }
+            }
+          },
+          {
+            "id": "b67e535a495954f7",
+            "type": "leaf",
+            "state": {
+              "type": "tag",
+              "state": {
+                "sortOrder": "frequency",
+                "useHierarchy": true
+              }
+            }
+          },
+          {
+            "id": "3665863ed03d2de4",
+            "type": "leaf",
+            "state": {
+              "type": "outline",
+              "state": {
+                "file": "Targets.md"
+              }
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300,
+    "collapsed": true
+  },
+  "active": "52f5230ae4d11973",
+  "lastOpenFiles": [
+    "Specs.md",
+    "Arch.md",
+    "Modules/Compiler.md",
+    "Modules/Emulator.md",
+    "Modules/Graphics.md",
+    "Modules/IO.md",
+    "Targets.md",
+    "Untitled.md"
+  ]
+}
