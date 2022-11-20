@@ -32,6 +32,16 @@
             }
           },
           {
+            "id": "f34acfce5222d4b2",
+            "type": "leaf",
+            "state": {
+              "type": "excalidraw",
+              "state": {
+                "file": "Excalidraw/Arch.md"
+              }
+            }
+          },
+          {
             "id": "1b5ae5a601ab4f7e",
             "type": "leaf",
             "state": {
@@ -168,7 +178,7 @@
             "state": {
               "type": "backlink",
               "state": {
-                "file": "Arch - x128.md",
+                "file": "Excalidraw/Arch.md",
                 "collapseAll": false,
                 "extraContext": false,
                 "sortOrder": "alphabetical",
@@ -185,7 +195,7 @@
             "state": {
               "type": "outgoing-link",
               "state": {
-                "file": "Arch - x128.md",
+                "file": "Excalidraw/Arch.md",
                 "linksCollapsed": false,
                 "unlinkedCollapsed": true
               }
@@ -208,8 +218,16 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "Arch - x128.md"
+                "file": "Excalidraw/Arch.md"
               }
+            }
+          },
+          {
+            "id": "b8fb4a2fbae7f11d",
+            "type": "leaf",
+            "state": {
+              "type": "calendar",
+              "state": {}
             }
           }
         ]
@@ -219,10 +237,11 @@
     "width": 300,
     "collapsed": true
   },
-  "active": "1b5ae5a601ab4f7e",
+  "active": "f34acfce5222d4b2",
   "lastOpenFiles": [
-    "Targets.md",
     "Arch - x128.md",
+    "Excalidraw/Arch.md",
+    "Targets.md",
     "Modules/IO.md",
     "Specs.md",
     "Modules/Compiler.md",
