@@ -6,12 +6,13 @@ kanban-plugin: basic
 
 ## Setup
 
-- [ ] Vs Code
 - [ ] Vulkan on linux
 
 
 ## Design
 
+- [ ] VAU
+- [ ] CPU
 
 
 ## Tests
@@ -29,6 +30,7 @@ kanban-plugin: basic
 ## Completed
 
 **Complete**
+- [x] Vs Code
 
 
 

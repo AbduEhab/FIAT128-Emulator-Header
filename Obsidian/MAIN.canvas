@@ -1,0 +1,16 @@
+{
+	"nodes":[
+		{"id":"ce15175ac400a49a","x":-300,"y":-1037,"width":400,"height":400,"type":"file","file":"Fiat-128/ALU (Arithmetic Logic Unit).md"},
+		{"id":"1cdca75f365121b0","x":-301,"y":-481,"width":400,"height":400,"type":"file","file":"Fiat-128/Arch - x128.md"},
+		{"id":"b9727446cfd2a811","x":318,"y":-481,"width":400,"height":400,"type":"file","file":"Excalidraw/Chip Layout.md"},
+		{"id":"93b5d40bc668e64d","x":-931,"y":-481,"width":400,"height":400,"type":"file","file":"Fiat-128/Memory Layout.md"},
+		{"id":"04a7e5c1264f42e4","x":1005,"y":-481,"width":400,"height":400,"type":"file","file":"Modules/Graphics/YURI - x128.md"},
+		{"id":"582f9bab99ce402d","x":1005,"y":97,"width":400,"height":400,"type":"file","file":"Modules/Graphics/VAU (Vector Arithmetic Unit).md"}
+	],
+	"edges":[
+		{"id":"2bd32719cd47f2d4","fromNode":"1cdca75f365121b0","fromSide":"right","toNode":"b9727446cfd2a811","toSide":"left"},
+		{"id":"51e90d265c97a7a0","fromNode":"1cdca75f365121b0","fromSide":"left","toNode":"93b5d40bc668e64d","toSide":"right"},
+		{"id":"893a7fb9730ea1f7","fromNode":"1cdca75f365121b0","fromSide":"top","toNode":"ce15175ac400a49a","toSide":"bottom"},
+		{"id":"ba2cc50d9487ca7d","fromNode":"04a7e5c1264f42e4","fromSide":"bottom","toNode":"582f9bab99ce402d","toSide":"top"}
+	]
+}
