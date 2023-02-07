@@ -1,4 +1,5 @@
-#include <Constants.hpp>
+#define STATIC_MEMORY
+
 #include <FIAT128.hpp>
 
 constexpr float itr_sqrt(float n)
@@ -25,7 +26,7 @@ int main([[maybe_unused]] int, [[maybe_unused]] char **)
 
     TimedBlock block("Main functions");
 
-    print_by_force("Hello World!\nThe largest number I can hold is: ", std::numeric_limits<int>::max(), "\n");
+    Fiat128::print_by_force("Hello World!\nThe largest number I can hold is: ", std::numeric_limits<int>::max(), "\n");
 
     std::cout << itr_sqrt(16) << std::endl;
 

@@ -1,6 +1,6 @@
 # Overview
 
-This is the base base library project for the Fiat128 Emulator. It contains the basic functionality for the emulator. It is a header only library that can be compiled as a static library. It is also a submodule of the [Fiat128 Emulator](
+This is the base base library project for the Fiat128 Emulator. It contains the basic functionality for the emulator. It is a header only library that can be compiled as a static library. It is the hear of the [Fiat128 Emulator](https://github.com/AbduEhab/FIAT128-Emulator).
 
 ## Requirements (for compiling)
 - [CMake](https://cmake.org/)
