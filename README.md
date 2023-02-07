@@ -1,6 +1,6 @@
-# Cmake-Template Repo
+# Overview
 
-For those who are like me and just wanna yoink some ready-to-go clean project files.
+This is the base base library project for the Fiat128 Emulator. It contains the basic functionality for the emulator. It is a header only library that can be compiled as a static library. It is also a submodule of the [Fiat128 Emulator](
 
 ## Requirements (for compiling)
 - [CMake](https://cmake.org/)

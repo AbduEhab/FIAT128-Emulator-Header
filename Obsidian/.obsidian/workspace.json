@@ -67,7 +67,7 @@
       }
     ],
     "direction": "horizontal",
-    "width": 317.5
+    "width": 289.5
   },
   "right": {
     "id": "2ed9ca3357ba9a25",
@@ -158,15 +158,15 @@
   },
   "active": "a07cf5f69d30f583",
   "lastOpenFiles": [
-    "MAIN.canvas",
-    "Fiat-128/Memory Layout.md",
-    "Fiat-128/Instructions Layout.md",
     "Fiat-128/Arch - x128.md",
+    "Modules/Graphics/YURI - x128.md",
+    "Modules/Graphics/RAU (Rasterization Acceleration Unit).md",
+    "Fiat-128/Memory Layout.md",
     "Fiat-128/ALU (Arithmetic Logic Unit).md",
-    "Modules/Graphics/VAU (Vector Arithmetic Unit).md",
+    "Excalidraw/Chip Layout.md",
+    "MAIN.canvas",
+    "Fiat-128/Instructions Layout.md",
     "download.svg",
-    "download 1.svg",
-    "Fiat-128/Instructio.md",
-    "Modules/Graphics/YURI - x128.md"
+    "download 1.svg"
   ]
 }

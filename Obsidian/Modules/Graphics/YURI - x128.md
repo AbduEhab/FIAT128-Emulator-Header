@@ -1,6 +1,6 @@
 
 #Vector_Arithmetic_Unit
-[[VAU (Vector Arithmetic Unit)]]
+[[RAU (Rasterization Acceleration Unit)]]
 
 > VAU Registers:
 
