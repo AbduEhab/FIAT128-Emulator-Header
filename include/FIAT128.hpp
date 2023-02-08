@@ -160,60 +160,111 @@ namespace Fiat128
         return std::is_base_of<Base, T>::value;
     }
 
-    struct EmulatorState;
+    /**
+     * @brief lamda to check if a number is a power of 2
+     *
+     * @param x number to check
+     */
+    auto is_power_of_2 = [](long long x) -> bool
+    {
+        return (x != 0) && ((x & (x - 1)) == 0);
+    };
 
     template <size_t T>
     struct Register
     {
-        bool array[T] = {0};
+        bool data[T] = {0};
         size_t size = T;
         bool overflow = false;
 
-        void set_data(size_t (&data)[T])
+        /**
+         * @brief set the data of the register
+         *
+         * @param data the data to set
+         */
+        void set_data(size_t (&data)[T]) noexcept
         {
             for (size_t i = 0; i < T; i++)
             {
-                array[i] = data[i];
+                this->data[i] = data[i];
             }
         }
 
-        void set_bit(size_t index, bool value)
+        /**
+         * @brief sets a bit in the register
+         *
+         * @param index the index of the bit to set
+         * @param value the value to set the bit to
+         */
+        void set_bit(size_t index, bool value) noexcept
         {
-            array[index] = value;
+            data[T - index - 1] = value;
 
             overflow = false;
         }
 
-        auto get_bit(size_t index) -> bool
+        /**
+         * @brief gets a bit in the register
+         *
+         * @param index the index of the bit to get
+         *
+         * @return bool the value of the bit
+         */
+        auto get_bit(size_t index) const noexcept -> bool
         {
-            return array[index];
+            return data[T - index - 1];
         }
 
-        void reset_overflow()
+        /**
+         * @brief resets the overflow flag
+         *
+         */
+        void reset_overflow() noexcept
         {
             overflow = false;
         }
 
-        auto get_overflow() -> bool
+        /**
+         * @brief gets the overflow flag
+         *
+         * @return true if overflow
+         * @return false if no overflow
+         */
+        auto get_overflow() const noexcept -> bool
         {
-            return overflow;
+            if (overflow) [[unlikely]]
+            {
+                overflow = false;
+                return true;
+            }
+            return false;
         }
 
-        void clear()
+        /**
+         * @brief clears the register
+         *
+         */
+        void clear() noexcept
         {
             for (size_t i = 0; i < T; i++)
             {
-                array[i] = 0;
+                data[i] = 0;
             }
 
             overflow = false;
         }
 
-        auto is_zero() -> bool
+        /**
+         * @brief checks if the register is zero
+         *
+         * @return true if zero
+         * @return false if not zero
+         */
+        auto is_zero() const noexcept -> bool
         {
             for (size_t i = 0; i < T; i++)
             {
-                if (array[i] == 1)
+                if (data[i] == 1)
                 {
                     return false;
                 }
@@ -221,19 +272,24 @@ namespace Fiat128
             return true;
         }
 
-        void inc()
+        /**
+         * @brief increments the register and sets the overflow flag
+         *
+         * @note if the register is already at the max value, the overflow flag is set and the register is cleared
+         */
+        void inc() noexcept
         {
             // inc and set overflow
             for (size_t i = T - 1; i > 0; i--)
             {
-                if (array[i] == 0)
+                if (data[i] == 0)
                 {
-                    array[i] = 1;
+                    data[i] = 1;
                     break;
                 }
                 else
                 {
-                    array[i] = 0;
+                    data[i] = 0;
                 }
             }
 
@@ -241,13 +297,35 @@ namespace Fiat128
                 overflow = true;
         }
 
-        auto operator++() -> Register<T> &
+        auto operator++() noexcept -> Register<T> &
         {
             inc();
             return *this;
         }
 
-        auto operator+=(const long long value)
+        auto operator--() noexcept -> Register<T> &
+        {
+            // dec
+            for (size_t i = T - 1; i > 0; i--)
+            {
+                if (data[i] == 1)
+                {
+                    data[i] = 0;
+                    break;
+                }
+                else
+                {
+                    data[i] = 1;
+                }
+            }
+            // set overflow
+            if (is_zero())
+                overflow = true;
+
+            return *this;
+        }
+
+        auto operator+=(const long long value) noexcept
         {
             for (size_t i = 0; i < value; i++)
             {
@@ -255,61 +333,61 @@ namespace Fiat128
             }
         }
 
-        auto operator~()
+        auto operator~() const noexcept -> Register<T>
         {
             Register<T> result;
 
             for (size_t i = 0; i < T; i++)
             {
-                result.array[i] = !array[i];
+                result.data[i] = !data[i];
             }
 
             return result;
         }
 
-        auto operator=(const Register<T> &other)
+        auto operator=(const Register<T> &other) noexcept
         {
             for (size_t i = 0; i < T; i++)
             {
-                array[i] = other.array[i];
+                data[i] = other.data[i];
             }
         }
 
-        auto operator=(const bool other)
+        auto operator=(const bool other) noexcept
         {
             for (size_t i = 0; i < T; i++)
             {
-                array[i] = other;
+                data[i] = other;
             }
         }
 
-        auto operator+(const Register<T> &other) -> Register<T>
+        auto operator+(const Register<T> &other) const noexcept -> Register<T>
         {
             Register<T> result;
             bool carry = false;
             for (size_t i = T - 1; i > 0; i--)
             {
-                if (array[i] == 0 && other.array[i] == 0)
+                if (data[i] == 0 && other.data[i] == 0)
                 {
                     if (carry)
                     {
-                        result.array[i] = 1;
+                        result.data[i] = 1;
                         carry = false;
                     }
                     else
                     {
-                        result.array[i] = 0;
+                        result.data[i] = 0;
                     }
                 }
-                else if (array[i] == 1 && other.array[i] == 1)
+                else if (data[i] == 1 && other.data[i] == 1)
                 {
                     if (carry)
                     {
-                        result.array[i] = 1;
+                        result.data[i] = 1;
                     }
                     else
                     {
-                        result.array[i] = 0;
+                        result.data[i] = 0;
                         carry = true;
                     }
                 }
@@ -317,11 +395,11 @@ namespace Fiat128
                 {
                     if (carry)
                     {
-                        result.array[i] = 0;
+                        result.data[i] = 0;
                     }
                     else
                     {
-                        result.array[i] = 1;
+                        result.data[i] = 1;
                     }
                 }
             }
@@ -332,14 +410,14 @@ namespace Fiat128
             return result;
         }
 
-        auto operator-(const Register<T> &other) -> Register<T>
+        auto operator-(const Register<T> &other) const noexcept -> Register<T>
         {
 
             Register<T> reverse;
 
             for (size_t i = 0; i < T; i++)
             {
-                reverse.array[i] = !other.array[i];
+                reverse.data[i] = !other.data[i];
             }
 
             Register<T> one;
@@ -350,67 +428,84 @@ namespace Fiat128
             return *this + two_complement;
         }
 
-        auto operator&(const Register<T> &other) -> Register<T>
+        auto operator&(const Register<T> &other) const noexcept -> Register<T>
         {
             Register<T> result;
             for (size_t i = 0; i < T; i++)
             {
-                result.array[i] = array[i] & other.array[i];
+                result.data[i] = data[i] & other.data[i];
             }
             return result;
         }
 
-        auto operator|(const Register<T> &other) -> Register<T>
+        auto operator|(const Register<T> &other) const noexcept -> Register<T>
         {
             Register<T> result;
             for (size_t i = 0; i < T; i++)
             {
-                result.array[i] = array[i] | other.array[i];
+                result.data[i] = data[i] | other.data[i];
             }
             return result;
         }
 
-        auto operator^(const Register<T> &other) -> Register<T>
+        auto operator|(const char other) const noexcept -> Register<T>
+        {
+            std::bitset<T> bitset(other);
+
+            Register<T> result;
+
+            for (size_t i = 0; i < T; i++)
+            {
+                if (bitset[i])
+                {
+                    result.data[i] = 1;
+                }
+            }
+
+            return result;
+        }
+
+        auto operator^(const Register<T> &other) const noexcept -> Register<T>
         {
             Register<T> result;
             for (size_t i = 0; i < T; i++)
             {
-                result.array[i] = array[i] ^ other.array[i];
+                result.data[i] = data[i] ^ other.data[i];
             }
             return result;
         }
 
-        auto operator<<(const size_t value) -> Register<T>
+        auto operator<<(const size_t value) const noexcept -> Register<T>
         {
             Register<T> result;
             for (size_t i = 0; i < T; i++)
             {
                 if (i + value < T)
                 {
-                    result.array[i + value] = array[i];
+                    result.data[i + value] = data[i];
                 }
             }
             return result;
         }
 
-        auto operator>>(const size_t value) -> Register<T>
+        auto operator>>(const size_t value) const noexcept -> Register<T>
         {
             Register<T> result;
             for (size_t i = 0; i < T; i++)
             {
                 if (i - value >= 0)
                 {
-                    result.array[i - value] = array[i];
+                    result.data[i - value] = data[i];
                 }
             }
             return result;
         }
 
-        auto operator==(const Register<T> &other) -> bool
+        auto operator==(const Register<T> &other) const noexcept -> bool
         {
             for (size_t i = 0; i < T; i++)
             {
-                if (array[i] != other.array[i])
+                if (data[i] != other.data[i])
                 {
                     return false;
                 }
@@ -418,15 +513,15 @@ namespace Fiat128
             return true;
         }
 
-        auto operator>(const Register<T> &other) -> bool
+        auto operator>(const Register<T> &other) const noexcept -> bool
         {
             for (size_t i = 0; i < T; i++)
             {
-                if (array[i] == 1 && other.array[i] == 0)
+                if (data[i] == 1 && other.data[i] == 0)
                 {
                     return true;
                 }
-                else if (array[i] == 0 && other.array[i] == 1)
+                else if (data[i] == 0 && other.data[i] == 1)
                 {
                     return false;
                 }
@@ -434,52 +529,89 @@ namespace Fiat128
             return false;
         }
 
-        auto get_byte(size_t index) -> Register<8>
+        /**
+         * @brief Get the bit object
+         *
+         * @param index
+         * @return bool
+         */
+        auto get_byte(size_t index) const noexcept -> Register<8>
         {
+            index = T - index - 1;
+
             Register<8> byte;
-            for (size_t i = 0; i < 8; i++)
+            for (size_t i = index; i > 0; i--)
             {
-                byte.array[i] = array[index * 8 + i];
+                byte.data[i] = data[index * 8 + i];
             }
             return byte;
         }
 
-        auto get_address() -> Register<24>
+        /**
+         * @brief Get the address from the register
+         *
+         * @return Register<T>
+         */
+        auto get_address() const noexcept -> Register<T>
         {
-            Register<24> byte;
-            for (size_t i = 8; i < 32; i++)
+            Register<T> byte;
+            for (size_t i = 9; i < T - 9; i++)
             {
-                byte.array[i - 8] = array[i];
+                byte.data[i] = data[i];
             }
 
             return byte;
         }
 
-        auto set_byte(size_t index, Register<8> byte)
+        /**
+         * @brief Set a byte of the register
+         *
+         * @param index
+         * @param byte
+         *
+         * @note least significant bit is at index 0
+         */
+        auto set_byte(size_t index, const Register<8> byte) const noexcept
         {
+            index = T - index - 1;
+
             for (size_t i = 0; i < 8; i++)
             {
-                array[index * 8 + i] = byte.array[i];
+                data[index * 8 + i] = byte.data[i];
             }
         }
 
-        auto get_byte_as_char(size_t index) -> unsigned char
+        /**
+         * @brief Set a bit of the register
+         *
+         * @param index
+         * @param value
+         *
+         * @note least significant bit is at index 0
+         */
+        auto get_byte_as_char(size_t index) const noexcept -> unsigned char
         {
             Register<8> byte = get_byte(index);
             std::bitset<8> bitset;
+
             for (size_t i = 0; i < 8; i++)
             {
-                bitset[i] = byte.array[i];
+                bitset[i] = byte.data[i];
             }
             return (unsigned char)bitset.to_ulong();
         }
 
-        auto get_value() -> unsigned long long
+        /**
+         * @brief Get tje numeric value of the register
+         *
+         * @return unsigned long long
+         */
+        auto get_value() const noexcept -> unsigned long long
         {
             std::bitset<T> bitset;
             for (size_t i = 0; i < T; i++)
             {
-                bitset[i] = array[i];
+                bitset[i] = data[i];
             }
             return bitset.to_ullong();
         }
@@ -539,96 +671,20 @@ namespace Fiat128
     struct Instruction
     {
         std::string_view name;
-        void (*opcode)(EmulatorState &) = nullptr;
+        void (*opcode)() = nullptr;
         char cycles = 0;
 
         static auto decode_from_opcode(Register<8> opcode) -> Instruction;
     };
 
-    // instruction function declarations
-    // void ADD(Register<128> &dest, Register<128> &src1, Register<128> &src2);
-    // void SUB(Register<128> &dest, Register<128> &src1, Register<128> &src2);
-    // void AND(Register<128> &dest, Register<128> &src1, Register<128> &src2);
-    // void OR(Register<128> &dest, Register<128> &src1, Register<128> &src2);
-    // void XOR(Register<128> &dest, Register<128> &src1, Register<128> &src2);
-    // void MOVE(Register<128> &dest, Register<128> &src1);
-    // void BUN();
-    // void BIZ(Register<128> &dest);
-    // void BNZ(Register<128> &dest);
-    // void RET();
-    // void LDA(Register<128> &dest);
-    // void STA(Register<128> &dest);
-    // void EQ(Register<128> &src1, Register<128> &src2);
-    // void GT(Register<128> &src1, Register<128> &src2);
-    // void SHL(Register<128> &src1);
-    // void SHR(Register<128> &src1);
-    // void ROL(Register<128> &src1);
-    // void ROR(Register<128> &src1);
-    // void HALT();
-    // void VADD(Register<128> &dest, Register<128> &src1, Register<128> &src2);
-    // void VSUB(Register<128> &dest, Register<128> &src1, Register<128> &src2);
-    // void VAND(Register<128> &dest, Register<128> &src1, Register<128> &src2);
-    // void VOR(Register<128> &dest, Register<128> &src1, Register<128> &src2);
-    // void VXOR(Register<128> &dest, Register<128> &src1, Register<128> &src2);
-    // void VEQ(Register<128> &src1, Register<128> &src2);
-    // void VGT(Register<128> &src1, Register<128> &src2);
-    // void XXX();
-
-    void ADD(EmulatorState &state);
-    void SUB(EmulatorState &state);
-    void AND(EmulatorState &state);
-    void OR(EmulatorState &state);
-    void XOR(EmulatorState &state);
-    void MOV(EmulatorState &state);
-    void BUN(EmulatorState &state);
-    void BIZ(EmulatorState &state);
-    void BNZ(EmulatorState &state);
-    void LDA(EmulatorState &state);
-    void STA(EmulatorState &state);
-    void EQ(EmulatorState &state);
-    void GT(EmulatorState &state);
-    void SHL(EmulatorState &state);
-    void SHR(EmulatorState &state);
-    void ROL(EmulatorState &state);
-    void ROR(EmulatorState &state);
-    void HALT(EmulatorState &state);
-    void XXX(EmulatorState &state);
-
-    constexpr int instruction_count = 19;
-
-    // instrcution table
-    constexpr Instruction instruction_table[instruction_count] = {
-        {"ADD", &ADD, 1},
-        {"SUB", &SUB, 1},
-        {"AND", &AND, 1},
-        {"OR", &OR, 1},
-        {"XOR", &XOR, 1},
-        {"MOV", &MOV, 1},
-        {"BUN", &BUN, 1},
-        {"BIZ", &BIZ, 2},
-        {"BIN", &BNZ, 2},
-        {"LDA", &LDA, 2},
-        {"STA", &STA, 2},
-        {"EQ", &EQ, 1},
-        {"GT", &GT, 1},
-        {"SHL", &SHL, 1},
-        {"SHR", &SHR, 1},
-        {"ROL", &ROL, 1},
-        {"ROR", &ROR, 1},
-        {"HALT", &HALT, 1},
-        {"XXX", &XXX, 1},
-    };
-
-    auto Instruction::decode_from_opcode(Register<8> opcode) -> Instruction
-    {
-        unsigned char opcode_as_char = opcode.get_byte_as_char(0);
-
-        if (opcode_as_char > instruction_count || opcode_as_char < 0)
-            return instruction_table[instruction_count];
-
-        return instruction_table[opcode_as_char];
-    }
-
+    /**
+     * @brief calculates the power of a number at compile time
+     *
+     * @param base base of the power
+     * @param exponent exponent of the power
+     *
+     * @return long long
+     */
     constexpr auto const_pow(long base, long exponent) -> long long
     {
         long long result = 1;
@@ -649,292 +705,593 @@ namespace Fiat128
 
 #endif // STATIC_MEMORY
 
+    template <char size>
     struct EmulatorState
     {
+
+        EmulatorState(bool static_memory = true)
+        {
+            assert(is_power_of_2(size));
+
+            // initialize memory
+            if constexpr (static_memory) [[likely]]
+            {
+                for (long long i = 0; i < MEMORY_SIZE; ++i)
+                {
+                    memory[i] = 0;
+                }
+            }
+            else
+            {
+                memory = new std::vector<Register<size>>(MEMORY_SIZE);
+            }
+        }
+
+        // execute instruction
+        auto execute_instruction()
+        {
+            if (flag.get_bit(4))
+            {
+                debug_print("CPU halted\n", "");
+                return;
+            }
+
+            if (interrupt_enabled && new_instruction) [[unlikely]]
+            {
+                interrupt_enabled = false;
+                flag = flag & 0b1111'1110;
+                pc = sii;
+            }
+
+            if (step_mode)
+            {
+                switch (instruction_cycle)
+                {
+                case 0:
+
+                    if (timer == 0) [[unlikely]]
+                    {
+                        interrupt_enabled = true;
+                        flag = flag | 0b0000'0001;
+                    }
+
+                    instruction_cycle = 1;
+                    total_cpu_cycles++;
+
+                    // fetch instruction
+                    acc = get_word();
+                    current_instruction = decode_instruction(acc);
+
+                    pc++;
+                    timer--;
+                    break;
+
+                case 1:
+
+                    if (timer == 0) [[unlikely]]
+                    {
+                        interrupt_enabled = true;
+                        flag = flag | 0b0000'0001;
+                    }
+
+                    instruction_cycle = 2;
+                    total_cpu_cycles++;
+
+                    // execute instruction
+                    (*current_instruction.opcode)();
+
+                    if (current_instruction.cycles != 2) [[likely]]
+                    {
+                        instruction_cycle = 0;
+                        new_instruction = true;
+                        break;
+                    }
+
+                    pc++;
+                    timer--;
+                    break;
+
+                case 2:
+
+                    if (timer == 0) [[unlikely]]
+                    {
+                        interrupt_enabled = true;
+                        flag = flag | 0b0000'0001;
+                    }
+
+                    instruction_cycle = 0;
+                    total_cpu_cycles++;
+
+                    // execute instruction
+                    (*current_instruction.opcode)();
+
+                    pc++;
+                    timer--;
+                    break;
+                }
+            }
+            else
+            {
+                instruction_cycle = 1;
+                total_cpu_cycles++;
+                (*current_instruction.opcode)();
+            }
+        }
+
         // 128-bit general purpose registers
-        Register<128> reg[8];
+        Register<size> reg[8];
 
-        // 128-bit general purpose vector registers
-        Register<128> vec_regs[8];
+        // the flag register [0 interuptn flag, 1 overflow flag, 2 zero flag, 3 sign flag]
+        Register<8> flag;
 
-        // Timer register
-        Register<128> timer;
+        // Timer register, counts till the end of time!
+        Register<size> timer;
 
         // Stack pointer
-        Register<128> sp;
+        Register<size> sp;
 
         // Segment index (stack)
-        Register<128> sis;
+        Register<size> sis;
 
         // Segment limit (stack)
-        Register<128> sls;
+        Register<size> sls;
 
-        // Segment index (heap)
-        Register<128> sih;
+        // Segment index (interrupt)
+        Register<size> sii;
 
-        // Segment limit (heap)
-        Register<128> slh;
+        // Segment limit (interrupt)
+        Register<size> sli;
 
         // Segment index (code)
-        Register<128> sic;
+        Register<size> sic;
 
         // Segment limit (code)
-        Register<128> slc;
+        Register<size> slc;
 
         // Segment index (io)
-        Register<128> sii;
+        Register<size> siio;
 
         // Segment limit (io)
-        Register<128> sli;
+        Register<size> slio;
 
-        // Accumulator
-        Register<32> acc;
+        // Accumulator - for debugging
+        Register<size> acc;
 
         // Interrupt enable flag
         bool interrupt_enabled;
 
         // Program counter
-        Register<128> pc;
+        Register<size> pc;
 
 #ifdef STATIC_MEMORY
         // Memory
-        Register<128> memory[MEMORY_SIZE];
+        Register<size> memory[MEMORY_SIZE];
 #else
         // Memory
-        Register<128> memory[MEMORY_SIZE];
+        std::vector<Register<size>> memory;
 
 #endif // STATIC_MEMORY
 
+    private:
+        /**
+         * @brief gets the next word from memory
+         *
+         * @return Register<size>
+         * @note the size of the register is the same as the size of the memory, this is a helper function
+         */
+        auto get_word() -> Register<128>
+        {
+            return memory[pc.get_value()];
+        }
+
+        /**
+         * @brief decodes the instruction from the opcode
+         *
+         * @param word The word containing the opcode
+         * @return Instruction
+         *
+         * @note this is a helper function
+         */
+        template <char T>
+        auto decode_instruction(Register<T> &word) -> Instruction
+        {
+            Register<8> opcode = word.get_byte(0);
+            return Instruction::decode_from_opcode(opcode);
+        }
+
+        /* instruction function definitions */
+
+        /**
+         * @brief adds two registers and stores the result in the third register
+         *
+         * @note the overflow flag is set if the result is too large to fit in the register, the zero flag is set if the result is zero, and the sign flag is set if the result is negative
+         */
+        void ADD()
+        {
+            reg[current_word.get_byte(2).get_value()] = reg[current_word.get_byte(1).get_value()] + reg[current_word.get_byte(0).get_value()];
+
+            bool overflow = reg[current_word.get_byte(2).get_value()].get_overflow();
+            bool is_zero = reg[current_word.get_byte(2).get_value()].is_zero();
+            bool sign = reg[current_word.get_byte(2).get_value()].get_bit(0);
+
+            flag = flag & 0b1111'0001;
+
+            flag = flag | (overflow << 1);
+            flag = flag | (is_zero << 2);
+            flag = flag | (sign << 3);
+
+            debug_print("ADD executed\n", "");
+        }
+
+        /**
+         * @brief subtracts two registers and stores the result in the third register
+         *
+         * @note the overflow flag is set if the result is too large to fit in the register, the zero flag is set if the result is zero, and the sign flag is set if the result is negative
+         */
+        void SUB()
+        {
+            reg[current_word.get_byte(2).get_value()] = reg[current_word.get_byte(1).get_value()] - reg[current_word.get_byte(0).get_value()];
+
+            bool overflow = reg[current_word.get_byte(2).get_value()].get_overflow();
+            bool is_zero = reg[current_word.get_byte(2).get_value()].is_zero();
+            bool sign = reg[current_word.get_byte(2).get_value()].get_bit(0);
+
+            flag = flag & 0b1111'0001;
+
+            flag = flag | (overflow << 1);
+            flag = flag | (is_zero << 2);
+            flag = flag | (sign << 3);
+
+            debug_print("SUB executed\n", "");
+        }
+
+        /**
+         * @brief ands two registers and stores the result in the third register
+         *
+         * @note the zero flag is set if the result is zero, and the sign flag is set if the result is negative
+         */
+        void AND()
+        {
+            reg[current_word.get_byte(2).get_value()] = reg[current_word.get_byte(1).get_value()] & reg[current_word.get_byte(0).get_value()];
+
+            bool is_zero = reg[current_word.get_byte(2).get_value()].is_zero();
+            bool sign = reg[current_word.get_byte(2).get_value()].get_bit(0);
+
+            flag = flag & 0b1111'0011;
+
+            flag = flag | (is_zero << 2);
+            flag = flag | (sign << 3);
+
+            debug_print("AND executed\n", "");
+        }
+
+        /**
+         * @brief ors two registers and stores the result in the third register
+         *
+         * @note the zero flag is set if the result is zero, and the sign flag is set if the result is negative
+         */
+        void OR()
+        {
+            reg[current_word.get_byte(2).get_value()] = reg[current_word.get_byte(1).get_value()] | reg[current_word.get_byte(0).get_value()];
+
+            bool is_zero = reg[current_word.get_byte(2).get_value()].is_zero();
+            bool sign = reg[current_word.get_byte(2).get_value()].get_bit(0);
+
+            flag = flag & 0b1111'0011;
+
+            flag = flag | (is_zero << 2);
+            flag = flag | (sign << 3);
+
+            debug_print("OR executed\n", "");
+        }
+
+        /**
+         * @brief xors two registers and stores the result in the third register
+         *
+         * @note the zero flag is set if the result is zero, and the sign flag is set if the result is negative
+         */
+        void XOR()
+        {
+            reg[current_word.get_byte(2).get_value()] = reg[current_word.get_byte(1).get_value()] ^ reg[current_word.get_byte(0).get_value()];
+
+            bool is_zero = reg[current_word.get_byte(2).get_value()].is_zero();
+            bool sign = reg[current_word.get_byte(2).get_value()].get_bit(0);
+
+            flag = flag & 0b1111'0011;
+
+            flag = flag | (is_zero << 2);
+            flag = flag | (sign << 3);
+
+            debug_print("XOR executed\n", "");
+        }
+
+        /**
+         * @brief moves the value of one register to another
+         *
+         * @note the zero flag is set if the result is zero, and the sign flag is set if the result is negative
+         */
+        void MOV()
+        {
+            reg[current_word.get_byte(2).get_value()] = reg[current_word.get_byte(1).get_value()];
+
+            bool is_zero = reg[current_word.get_byte(2).get_value()].is_zero();
+            bool sign = reg[current_word.get_byte(2).get_value()].get_bit(0);
+
+            flag = flag & 0b1111'0011;
+
+            flag = flag | (is_zero << 2);
+            flag = flag | (sign << 3);
+
+            debug_print("MOV executed\n", "");
+        }
+
+        /**
+         * @brief branches to the address specified in the register uncconditionally
+         */
+        void BUN()
+        {
+            pc = current_word.get_address();
+
+            debug_print("BUN executed\n", "");
+        }
+
+        /**
+         * @brief branches to the address specified in the register if the zero flag is set
+         */
+        void BIZ()
+        {
+            if (flag & 0b0000'0100 > 0)
+            {
+                pc = current_word.get_address();
+
+                debug_print("BIZ executed\n", "");
+            }
+
+            debug_print("BIZ did not execute\n", "");
+        }
+
+        /**
+         * @brief branches to the address specified in the register if the zero flag is not set
+         */
+        void BNZ()
+        {
+            if (flag & 0b0000'0100 == 0)
+            {
+                pc = current_word.get_address();
+
+                debug_print("BNZ executed\n", "");
+            }
+
+            debug_print("BNZ did not execute\n", "");
+        }
+
+        /**
+         * @brief branches to the address specified in the register if the sign flag is set
+         *
+         * @note the zero flag is set if the result is zero, and the sign flag is set if the result is negative
+         */
+        void LDA()
+        {
+            reg[current_word.get_byte(2).get_value()] = memory[current_word.get_address().get_value()];
+
+            bool is_zero = reg[current_word.get_byte(2).get_value()].is_zero();
+            bool sign = reg[current_word.get_byte(2).get_value()].get_bit(0);
+
+            flag = flag & 0b1111'0011;
+
+            flag = flag | (is_zero << 2);
+            flag = flag | (sign << 3);
+
+            debug_print("LDA executed\n", "");
+        }
+
+        /**
+         * @brief stores the value in the register in the memory address specified in the register
+         */
+        void STA()
+        {
+            memory[current_word.get_address().get_value()] = reg[current_word.get_byte(2).get_value()];
+
+            debug_print("STA executed\n", "");
+        }
+
+        /**
+         * @brief compares two registers and sets the zero flag if they are equal
+         */
+        void EQ()
+        {
+            reg[current_word.get_byte(2).get_value()] = reg[current_word.get_byte(1).get_value()] - reg[current_word.get_byte(0).get_value()];
+
+            if (reg[current_word.get_byte(2).get_value()].is_zero())
+            {
+                flag = flag | 0b0000'0100;
+            }
+            else
+            {
+                flag = flag & 0b1111'1011;
+            }
+
+            debug_print("EQ executed\n", "");
+        }
+
+        /**
+         * @brief compares two registers and sets the sign flag if the first register is greater than the second register
+         */
+        void GT() // Note(AbduEhab): needs to be revised
+        {
+            reg[current_word.get_byte(2).get_value()] = reg[current_word.get_byte(1).get_value()] - reg[current_word.get_byte(0).get_value()];
+
+            if (reg[current_word.get_byte(2).get_value()].get_bit(0))
+            {
+                flag = flag | 0b0000'1000;
+            }
+            else
+            {
+                flag = flag & 0b1111'0111;
+            }
+
+            debug_print("GT executed\n", "");
+        }
+
+        /**
+         * @brief shifts a register left by one
+         *
+         * @note the zero flag is set if the result is zero, and the sign flag is set if the result is negative
+         */
+        void SHL()
+        {
+            reg[current_word.get_byte(2).get_value()] = (reg[current_word.get_byte(2).get_value()] << 1);
+
+            bool is_zero = reg[current_word.get_byte(2).get_value()].is_zero();
+            bool sign = reg[current_word.get_byte(2).get_value()].get_bit(0);
+
+            flag = flag & 0b1111'0011;
+
+            flag = flag | (is_zero << 2);
+            flag = flag | (sign << 3);
+
+            debug_print("SHL executed\n", "");
+        }
+
+        /**
+         * @brief shifts a register right by one
+         *
+         * @note the zero flag is set if the result is zero, and the sign flag is set if the result is negative
+         */
+        void SHR()
+        {
+            reg[current_word.get_byte(2).get_value()] = (reg[current_word.get_byte(2).get_value()] >> 1);
+
+            bool is_zero = reg[current_word.get_byte(2).get_value()].is_zero();
+            bool sign = reg[current_word.get_byte(2).get_value()].get_bit(0);
+
+            flag = flag & 0b1111'0011;
+
+            flag = flag | (is_zero << 2);
+            flag = flag | (sign << 3);
+
+            debug_print("SHR executed\n", "");
+        }
+
+        /**
+         * @brief rotates a register left by one
+         *
+         * @note the zero flag is set if the result is zero, and the sign flag is set if the result is negative
+         */
+        void ROL()
+        {
+            reg[current_word.get_byte(2).get_value()] = (reg[current_word.get_byte(2).get_value()] << 1) | (reg[current_word.get_byte(2).get_value()].get_bit(size));
+
+            bool is_zero = reg[current_word.get_byte(2).get_value()].is_zero();
+            bool sign = reg[current_word.get_byte(2).get_value()].get_bit(0);
+
+            flag = flag & 0b1111'0011;
+
+            flag = flag | (is_zero << 2);
+            flag = flag | (sign << 3);
+
+            debug_print("ROL executed\n", "");
+        }
+
+        /**
+         * @brief rotates a register right by one
+         *
+         * @note the zero flag is set if the result is zero, and the sign flag is set if the result is negative
+         */
+        void ROR()
+        {
+            reg[current_word.get_byte(2).get_value()] = (reg[current_word.get_byte(2).get_value()] >> 1) | (reg[current_word.get_byte(2).get_value()].get_bit(0) << (size - 1));
+
+            bool is_zero = reg[current_word.get_byte(2).get_value()].is_zero();
+            bool sign = reg[current_word.get_byte(2).get_value()].get_bit(0);
+
+            flag = flag & 0b1111'0011;
+
+            flag = flag | (is_zero << 2);
+            flag = flag | (sign << 3);
+
+            debug_print("ROR executed\n", "");
+        }
+
+        /**
+         * @brief Halts the cpu
+         */
+        void HLT()
+        {
+            flag.set_bit(4, 1);
+            debug_print("HLT executed\n", "");
+        }
+
+        /**
+         * @brief halts the cpu and prints a message
+         *
+         * @note this instruction should not be possible to execute if code is compiled correctly
+         */
+        void XXX()
+        {
+            HLT();
+            debug_print("Invalid instruction\n", "");
+        }
+
+        struct Instruction
+        {
+            std::string_view name;
+            void (*opcode)() = nullptr;
+            char cycles = 0;
+
+            /**
+             * @brief decodes an opcode into an instruction
+             * @param opcode the opcode to decode
+             * @return the decoded instruction
+             * @note if the opcode is invalid, the instruction XXX is returned
+             */
+            static auto decode_from_opcode(Register<8> opcode) -> Instruction
+            {
+                unsigned char opcode_as_char = opcode.get_byte_as_char(0);
+
+                if (opcode_as_char > instruction_count || opcode_as_char < 0)
+                    return instruction_table[instruction_count];
+
+                return instruction_table[opcode_as_char];
+            }
+        };
+
+        // instruction count
+        static const int instruction_count = 19;
+
+        // instrcution table
+        static const Instruction instruction_table[instruction_count] = {
+            {"ADD", &ADD, 2},
+            {"SUB", &SUB, 2},
+            {"AND", &AND, 2},
+            {"OR", &OR, 2},
+            {"XOR", &XOR, 2},
+            {"MOV", &MOV, 2},
+            {"BUN", &BUN, 2},
+            {"BIZ", &BIZ, 3},
+            {"BIN", &BNZ, 3},
+            {"LDA", &LDA, 3},
+            {"STA", &STA, 3},
+            {"EQ", &EQ, 2},
+            {"GT", &GT, 2},
+            {"SHL", &SHL, 2},
+            {"SHR", &SHR, 2},
+            {"ROL", &ROL, 2},
+            {"ROR", &ROR, 2},
+            {"HALT", &HLT, 2},
+            {"XXX", &XXX, 2},
+        };
+
         // current instruction
         Instruction current_instruction;
-
-        // Flags
-        bool interupt_flag;
-        bool overflow_flag;
-        bool HLT_flag;
+        Register<size> current_word;
 
         // cpu cycles
         long long total_cpu_cycles = 0;
         char instruction_cycle = 0;
+
+        bool step_mode = false;
+        bool new_instruction = true;
     };
-
-    // get word from the memory
-    auto get_word(EmulatorState &state) -> Register<128>
-    {
-        Register<128> word = state.memory[state.pc.get_value()];
-        state.pc += 1;
-        return word;
-    }
-
-    // decode instruction
-    auto decode_instruction(EmulatorState &state)
-    {
-        Register<8> opcode = get_word(state).get_byte(0);
-        state.current_instruction = Instruction::decode_from_opcode(opcode);
-    }
-
-    // // execute instruction
-    // auto execute_instruction(EmulatorState &state)
-    // {
-    //     state.instruction_cycle = 1;
-    //     state.total_cpu_cycles++;
-    //     state.current_instruction.opcode();
-    // }
-
-    // instruction function definitions
-    void ADD(EmulatorState &state)
-    {
-        auto word = get_word(state);
-
-        auto dest = state.reg[word.get_byte(1).get_value()];
-        auto src1 = state.reg[word.get_byte(2).get_value()];
-        auto src2 = state.reg[word.get_byte(3).get_value()];
-
-        dest = src1 + src2;
-    }
-
-    void SUB(EmulatorState &state)
-    {
-        auto word = get_word(state);
-
-        auto dest = state.reg[word.get_byte(1).get_value()];
-        auto src1 = state.reg[word.get_byte(2).get_value()];
-        auto src2 = state.reg[word.get_byte(3).get_value()];
-
-        dest = src1 - src2;
-    }
-
-    void AND(EmulatorState &state)
-    {
-        auto word = get_word(state);
-
-        auto dest = state.reg[word.get_byte(1).get_value()];
-        auto src1 = state.reg[word.get_byte(2).get_value()];
-        auto src2 = state.reg[word.get_byte(3).get_value()];
-
-        dest = src1 & src2;
-    }
-
-    void OR(EmulatorState &state)
-    {
-        auto word = get_word(state);
-
-        auto dest = state.reg[word.get_byte(1).get_value()];
-        auto src1 = state.reg[word.get_byte(2).get_value()];
-        auto src2 = state.reg[word.get_byte(3).get_value()];
-
-        dest = src1 | src2;
-    }
-
-    void XOR(EmulatorState &state)
-    {
-        auto word = get_word(state);
-
-        auto dest = state.reg[word.get_byte(1).get_value()];
-        auto src1 = state.reg[word.get_byte(2).get_value()];
-        auto src2 = state.reg[word.get_byte(3).get_value()];
-
-        dest = src1 ^ src2;
-    }
-
-    void MOV(EmulatorState &state)
-    {
-        auto word = get_word(state);
-
-        auto dest = state.reg[word.get_byte(1).get_value()];
-        auto src = state.reg[word.get_byte(2).get_value()];
-
-        dest = src;
-    }
-
-    // branch unconditionally
-    void BUN(EmulatorState &state)
-    {
-        auto word = get_word(state);
-
-        auto dest = state.reg[word.get_address().get_value()];
-
-        state.pc = dest;
-    }
-
-    // branch if zero
-    void BIZ(EmulatorState &state)
-    {
-        auto word = get_word(state);
-
-        auto dest = state.reg[word.get_address().get_value()];
-
-        if (state.acc.get_value() == 0)
-        {
-            state.pc = dest;
-        }
-    }
-
-    // branch if not zero
-    void BNZ(EmulatorState &state)
-    {
-        auto word = get_word(state);
-
-        auto dest = state.reg[word.get_address().get_value()];
-
-        if (state.acc.get_value() != 0)
-        {
-            state.pc = dest;
-        }
-    }
-
-    // LDA
-    void LDA(EmulatorState &state)
-    {
-        auto word = get_word(state);
-
-        auto dest = state.reg[word.get_byte(1).get_value()];
-        auto src = state.reg[word.get_address().get_value()];
-
-        dest = src;
-    }
-
-    // STA
-    void STA(EmulatorState &state)
-    {
-        auto word = get_word(state);
-
-        auto src = state.reg[word.get_byte(1).get_value()];
-        state.memory[word.get_address().get_value()] = src;
-    }
-
-    // EQ - set reg to 1 if equal
-    void EQ(EmulatorState &state)
-    {
-        auto word = get_word(state);
-
-        auto dest = state.reg[word.get_byte(1).get_value()];
-        auto src1 = state.reg[word.get_byte(2).get_value()];
-        auto src2 = state.reg[word.get_byte(3).get_value()];
-
-        dest = src1 == src2;
-    }
-
-    // GT - set reg to 1 if greater than
-    void GT(EmulatorState &state)
-    {
-        auto word = get_word(state);
-
-        auto dest = state.reg[word.get_byte(1).get_value()];
-        auto src1 = state.reg[word.get_byte(2).get_value()];
-        auto src2 = state.reg[word.get_byte(3).get_value()];
-
-        dest = src1 > src2;
-    }
-
-    void SHL(EmulatorState &state)
-    {
-        auto word = get_word(state);
-
-        auto src = state.reg[word.get_byte(1).get_value()];
-
-        src = src << 1;
-    }
-
-    void SHR(EmulatorState &state)
-    {
-        auto word = get_word(state);
-
-        auto src = state.reg[word.get_byte(1).get_value()];
-
-        src = src >> 1;
-    }
-
-    // ROL - rotate left one
-    void ROL(EmulatorState &state)
-    {
-        auto word = get_word(state);
-
-        auto src = state.reg[word.get_byte(1).get_value()];
-
-        src = (src << 1) | (src >> 15);
-    }
-
-    // ROR - rotate right one
-    void ROR(EmulatorState &state)
-    {
-        auto word = get_word(state);
-
-        auto src = state.reg[word.get_byte(1).get_value()];
-
-        src = (src >> 1) | (src << 15);
-    }
-
-    // HALT
-    void HALT(EmulatorState &state)
-    {
-        state.HLT_flag = true;
-    }
-
-    void XXX(EmulatorState &state)
-    {
-        std::cout << "Invalid instruction" << std::endl;
-        HALT(state);
-    }
 
 } // FIAT128
