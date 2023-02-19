@@ -1,8 +1,8 @@
-#define STATIC_MEMORY
+// #define STATIC_MEMORY
 
 #include <FIAT128.hpp>
 
-constexpr float itr_sqrt(float n)
+constexpr float itr_sqrt(float n) // Note(AbduEhab): should be removed!!!
 {
     unsigned long i;
     float p0, p1;
@@ -26,9 +26,21 @@ int main([[maybe_unused]] int, [[maybe_unused]] char **)
 
     TimedBlock block("Main functions");
 
-    Fiat128::print_by_force("Hello World!\nThe largest number I can hold is: ", std::numeric_limits<int>::max(), "\n");
+    auto Emulator = FIAT128::Emulator<1, 1>(0xFFFFFF);
 
-    std::cout << itr_sqrt(16) << std::endl;
+    Emulator.add_word_to_cpu(0, 1, std::bitset<128>(2047));
+    Emulator.add_word_to_cpu(0, 2, std::bitset<128>(0x1));
+    Emulator.add_word_to_cpu(0, 3, std::bitset<128>(0x2));
+    Emulator.add_instruction_to_cpu(0, 0, FIAT128::InstructionType::BUN, FIAT128::RegisterIndex::R0);
+    Emulator.add_instruction_to_cpu(0, 0, FIAT128::InstructionType::MOV, FIAT128::RegisterIndex::R0, FIAT128::RegisterIndex::R0);
+
+    // Emulator.set_word(0, 0xFFFF00, 1);
+    // Emulator.add_instruction(0, 0xFFFFFF - 1, FIAT128::InstructionType::ADD, FIAT128::RegisterIndex::R0, FIAT128::RegisterIndex::R0, FIAT128::RegisterIndex::R1);
+
+    for (int i = 0; i < 100; i++)
+    {
+        Emulator.run(true);
+    }
 
     return 0;
 }

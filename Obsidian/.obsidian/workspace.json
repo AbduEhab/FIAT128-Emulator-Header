@@ -13,7 +13,7 @@
             "state": {
               "type": "excalidraw",
               "state": {
-                "file": "Fiat-128/Memory Layout.md"
+                "file": "Excalidraw/Chip Layout.md"
               }
             }
           }
@@ -83,7 +83,7 @@
             "state": {
               "type": "backlink",
               "state": {
-                "file": "Fiat-128/Memory Layout.md",
+                "file": "Excalidraw/Chip Layout.md",
                 "collapseAll": false,
                 "extraContext": false,
                 "sortOrder": "alphabetical",
@@ -100,7 +100,7 @@
             "state": {
               "type": "outgoing-link",
               "state": {
-                "file": "Fiat-128/Memory Layout.md",
+                "file": "Excalidraw/Chip Layout.md",
                 "linksCollapsed": false,
                 "unlinkedCollapsed": true
               }
@@ -123,7 +123,7 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "Fiat-128/Memory Layout.md"
+                "file": "Excalidraw/Chip Layout.md"
               }
             }
           },
@@ -159,12 +159,12 @@
   "active": "a07cf5f69d30f583",
   "lastOpenFiles": [
     "Fiat-128/Arch - x128.md",
+    "Fiat-128/Memory Layout.md",
+    "MAIN.canvas",
+    "Excalidraw/Chip Layout.md",
+    "Fiat-128/ALU (Arithmetic Logic Unit).md",
     "Modules/Graphics/YURI - x128.md",
     "Modules/Graphics/RAU (Rasterization Acceleration Unit).md",
-    "Fiat-128/Memory Layout.md",
-    "Fiat-128/ALU (Arithmetic Logic Unit).md",
-    "Excalidraw/Chip Layout.md",
-    "MAIN.canvas",
     "Fiat-128/Instructions Layout.md",
     "download.svg",
     "download 1.svg"
