@@ -8,7 +8,6 @@
 #include <deque>
 #include <filesystem>
 #include <fstream>
-#include <functional>
 #include <future>
 #include <iostream>
 #include <limits>
@@ -41,7 +40,7 @@
 
 #endif
 
-inline const int kCORE_COUNT = static_cast<int>(std::thread::hardware_concurrency()); // cpu cores, multi-threading
+inline const int kCORE_COUNT = static_cast<int>(std::thread::hardware_concurrency());
 
 #ifdef _WIN32
 
@@ -53,7 +52,7 @@ inline const int kCORE_COUNT = static_cast<int>(std::thread::hardware_concurrenc
 #include <windows.h>
 
 // inline const std::string BINARY_DIRECTORY(std::string(_getcwd(NULL, 0)) + '/');
-inline const std::string BINARY_DIRECTORY = std::filesystem::current_path().string(); // for referencing any file
+inline const std::string BINARY_DIRECTORY = std::filesystem::current_path().string();
 
 #else
 
@@ -68,21 +67,27 @@ inline const std::string BINARY_DIRECTORY = std::filesystem::current_path().stri
 
 namespace FIAT128
 {
+
+#define u32(x) static_cast<uint32_t>(x)
+#define to_char(x) static_cast<char>(x)
+#define to_bool(x) static_cast<bool>(x)
+#define to_size_t(x) static_cast<size_t>(x)
+
     /**
      * @brief A random number generator
      *
-     * @tparam T The type of the random number
+     *@tparam T The type of the random number
      *
-     * @param min The minimum value of the random number
-     * @param max The maximum value of the random number
+     *@param min The minimum value of the random number
+     *@param max The maximum value of the random number
      */
     template <typename T>
     inline T random(T min = 0.0, T max = 1.0)
     {
-        std::random_device rd;
-        std::mt19937 gen(rd());
-        std::uniform_real_distribution<> dis(min, max);
-        return (T)dis(gen);
+        thread_local std::random_device rd;
+        thread_local std::mt19937 gen(rd());
+        thread_local std::uniform_real_distribution<> dis(min, max);
+        return static_cast<T>(dis(gen));
     }
 
     /**
@@ -99,7 +104,7 @@ namespace FIAT128
     template <typename T>
     inline constexpr T map_to_range(T value, T min, T max, T new_min, T new_max)
     {
-        return (T)(((value - min) / (max - min)) * (new_max - new_min) + new_min);
+        return static_cast<T>(((value - min) / (max - min)) * (new_max - new_min) + new_min);
     }
 
     /**
@@ -117,6 +122,7 @@ namespace FIAT128
         if constexpr (sizeof...(rest) > 0) [[likely]]
         {
             print_by_force(rest...);
+            return;
         }
     }
 
@@ -141,7 +147,7 @@ namespace FIAT128
 #define debug_print(x, y) \
     print_by_force(x, y); \
     std::cout << std::endl;
-#define debug_async_print(x, y) async_print_by_force(x, y)
+#define debug_async_print(x, y) async_print_by_force(x, y);
 #else
 #define debug_print(x, y)
 #define debug_async_print(x, y)
@@ -194,39 +200,39 @@ namespace FIAT128
     enum InstructionType
     {
 
-        XXX = (uint32_t)0,
-        ADD = (uint32_t)1,
-        AND = (uint32_t)2,
-        OR = (uint32_t)3,
-        XOR = (uint32_t)4,
-        MOV = (uint32_t)5,
-        BUN = (uint32_t)6,
-        BIZ = (uint32_t)7,
-        BNZ = (uint32_t)8,
-        LDA = (uint32_t)9,
-        STA = (uint32_t)10,
-        LDR = (uint32_t)11,
-        STR = (uint32_t)12,
-        EQL = (uint32_t)13,
-        GRT = (uint32_t)14,
-        SHL = (uint32_t)15,
-        SHR = (uint32_t)16,
-        ROL = (uint32_t)17,
-        ROR = (uint32_t)18,
-        HLT = (uint32_t)19,
+        XXX = u32(0),
+        ADD = u32(1),
+        AND = u32(2),
+        OR = u32(3),
+        XOR = u32(4),
+        MOV = u32(5),
+        BUN = u32(6),
+        BIZ = u32(7),
+        BNZ = u32(8),
+        LDA = u32(9),
+        STA = u32(10),
+        LDR = u32(11),
+        STR = u32(12),
+        EQL = u32(13),
+        GRT = u32(14),
+        SHL = u32(15),
+        SHR = u32(16),
+        ROL = u32(17),
+        ROR = u32(18),
+        HLT = u32(19),
 
     };
     enum RegisterIndex
     {
-        R0 = (uint32_t)0,
-        R1 = (uint32_t)1,
-        R2 = (uint32_t)2,
-        R3 = (uint32_t)3,
-        R4 = (uint32_t)4,
-        R5 = (uint32_t)5,
-        R6 = (uint32_t)6,
-        R7 = (uint32_t)7,
-        TIMER = (uint32_t)8,
+        R0 = u32(0),
+        R1 = u32(1),
+        R2 = u32(2),
+        R3 = u32(3),
+        R4 = u32(4),
+        R5 = u32(5),
+        R6 = u32(6),
+        R7 = u32(7),
+        TIMER = u32(8),
     };
 
     template <size_t cores, size_t memory_modules, size_t word_size = 128>
@@ -235,27 +241,20 @@ namespace FIAT128
 
         Emulator(int memory_size = MEMORY_SIZE)
         {
-            Memory memory[memory_modules];
-
             for (size_t i = 0; i < memory_modules; i++)
-            {
-                memory[i] = Memory(memory_size);
-            }
+                memory[i] = Memory(to_size_t(memory_size));
+
+            for (size_t i = 0; i <= cores; i++)
+                cpus[i] = CPU(i, nullptr);
 
             bus = BUS(memory, cpus);
 
-            _0 = CPU(0, &bus);
-
-            for (size_t i = 1; i <= cores; i++)
-            {
-                cpus[i] = CPU(i, &bus);
-            }
+            for (size_t i = 0; i <= cores; i++)
+                cpus[i].set_bus(&bus);
         }
 
         auto run(bool step_mode = false)
         {
-            _0.execute_instruction(step_mode);
-
             for (auto &cpu : cpus)
             {
                 cpu.execute_instruction(step_mode);
@@ -287,20 +286,20 @@ namespace FIAT128
          */
         auto add_instruction(size_t channel, size_t index, InstructionType type, RegisterIndex dest, RegisterIndex src_1 = RegisterIndex::R0, RegisterIndex src_2 = RegisterIndex::R0)
         {
-            char instruction[4] = {(char)type, (char)dest, (char)src_1, (char)src_2};
+            char instruction[4] = {to_char(type), to_char(dest), to_char(src_1), to_char(src_2)};
             bus.write(channel, index, instruction);
         }
 
         auto add_instruction_to_cpu(char cpu_id, short index, InstructionType type, RegisterIndex dest, RegisterIndex src_1 = RegisterIndex::R0, RegisterIndex src_2 = RegisterIndex::R0)
         {
-            if (cpu_id < cores)
-                cpus[cpu_id].add_instruction(index, type, dest, src_1, src_2);
+            if (to_size_t(cpu_id) < cores)
+                cpus[to_size_t(cpu_id)].add_instruction(index, type, dest, src_1, src_2);
         }
 
         auto add_word_to_cpu(char cpu_id, short index, std::bitset<word_size> value)
         {
-            if (cpu_id < cores)
-                cpus[cpu_id].add_word(index, value);
+            if (to_size_t(cpu_id) < cores)
+                cpus[to_size_t(cpu_id)].add_word(index, value);
         }
 
         // auto set = [](auto &array, auto &&value, auto &&...indices)
@@ -319,7 +318,7 @@ namespace FIAT128
     private:
         struct Memory
         {
-            Memory() : memory(MEMORY_SIZE, std::bitset<word_size>(0)) {}
+            Memory() : memory(0, std::bitset<word_size>(0)) {}
 
             Memory(size_t size) : memory(size, std::bitset<word_size>(0)) {}
 
@@ -369,7 +368,7 @@ namespace FIAT128
             void write(size_t index, char (&value)[4])
             {
                 std::lock_guard<std::mutex> lock(memory_mutex);
-                memory[index] = std::bitset<word_size>((uint32_t)value[0] << 24 | (uint32_t)value[1] << 16 | (uint32_t)value[2] << 8 | (uint32_t)value[3]);
+                memory[index] = std::bitset<word_size>(u32(value[0]) << 24 | u32(value[1]) << 16 | u32(value[2]) << 8 | u32(value[3]));
             }
 
             std::vector<std::bitset<word_size>> memory;
@@ -381,16 +380,13 @@ namespace FIAT128
         struct BUS
         {
 
-            BUS()
-            {
-                assert(0);
-            }
+            BUS() = default;
 
-            BUS(const Memory (&memory_array)[memory_modules], CPU (&cpu_array)[cores])
+            BUS(Memory (&memory_array)[memory_modules], CPU (&cpu_array)[cores + 1])
             {
                 for (size_t i = 0; i < memory_modules; i++)
                 {
-                    memory[i] = memory_array[i];
+                    memory[i] = &memory_array[i];
                 }
 
                 for (size_t i = 0; i < in_connections; i++)
@@ -404,7 +400,7 @@ namespace FIAT128
 
                 for (size_t i = 0; i < cores; i++)
                 {
-                    cpus[i] = cpu_array[i];
+                    cpus[i] = &cpu_array[i];
                 }
             }
 
@@ -467,13 +463,13 @@ namespace FIAT128
                 {
                     assert(channel < channels);
 
-                    return memory[channel].read(index);
+                    return memory[channel]->read(index);
                 }
                 else if (id == 0)
                 {
                     assert((channel <= cores) && (channel != 0) && (index < 2028));
 
-                    return cpus[channel].cache[index];
+                    return cpus[channel]->cache[index];
                 }
 
                 return std::bitset<word_size>(0);
@@ -485,7 +481,7 @@ namespace FIAT128
                 {
                     assert(channel < channels);
 
-                    memory[channel].write(index, value);
+                    memory[channel]->write(index, value);
                 }
 
                 else if (id == 0)
@@ -501,12 +497,12 @@ namespace FIAT128
                 {
                     assert(channel < channels);
 
-                    memory[channel].write(index, value);
+                    memory[channel]->write(index, value);
                 }
                 else if (id == 0)
                 {
                     std::lock_guard<std::mutex> lock(cpu_mutex);
-                    cpus[channel].cache[index] = std::bitset<word_size>((uint32_t)value[0] << 24 | (uint32_t)value[1] << 16 | (uint32_t)value[2] << 8 | (uint32_t)value[3]);
+                    cpus[channel].cache[index] = std::bitset<word_size>(u32(value[0]) << 24 | u32(value[1]) << 16 | u32(value[2]) << 8 | u32(value[3]));
                 }
             }
 
@@ -516,8 +512,8 @@ namespace FIAT128
             bool in_state[cores];
             bool out_state[memory_modules];
 
-            Memory memory[memory_modules];
-            CPU cpus[cores];
+            Memory *memory[memory_modules];
+            CPU *cpus[cores + 1];
 
             std::mutex cpu_mutex;
         };
@@ -527,9 +523,10 @@ namespace FIAT128
 
             CPU() = default;
 
-            CPU(size_t id, BUS *bus) : id(id), bus(bus)
+            CPU(size_t assigned_id, BUS *extern_bus = nullptr) : id(assigned_id), bus(extern_bus)
             {
                 decrement(stack_pointer);
+                id++;
             }
 
             auto set_bus(BUS *extern_bus) -> void
@@ -643,6 +640,8 @@ namespace FIAT128
 
                             decrement(stack_pointer);
                             decrement(timer);
+
+                            break;
 
                         case 1:
 
@@ -768,7 +767,7 @@ namespace FIAT128
                         decrement(stack_pointer);
                         decrement(timer);
 
-                        for (size_t i = 1; i < current_instruction.cycles; i++)
+                        for (size_t i = 1; i < to_size_t(current_instruction.cycles); i++)
                         {
                             execute_instruction(true);
                         }
@@ -793,11 +792,11 @@ namespace FIAT128
                  * @return the decoded instruction
                  * @note if the opcode is invalid, the instruction XXX is returned
                  */
-                static auto decode_from_opcode(std::bitset<8> opcode) -> Instruction
+                static auto decode_from_opcode(std::bitset<8> &opcode) -> Instruction
                 {
-                    unsigned long opcode_as_char = opcode.to_ulong();
+                    auto opcode_as_char = to_char(opcode.to_ulong());
 
-                    if (opcode_as_char > instruction_count || opcode_as_char < 0)
+                    if ((opcode_as_char > instruction_count) || opcode_as_char < 0)
                         return instruction_table[instruction_count];
 
                     return instruction_table[opcode_as_char];
@@ -817,9 +816,9 @@ namespace FIAT128
                 std::bitset<8> opcode = get_byte(word, 3);
                 auto instruction = Instruction::decode_from_opcode(opcode);
 
-                instruction.dest = (char)get_byte(word, 2).to_ulong();
-                instruction.src_1 = (char)get_byte(word, 1).to_ulong();
-                instruction.src_2 = (char)get_byte(word, 0).to_ulong();
+                instruction.dest = to_char(get_byte(word, 2).to_ulong());
+                instruction.src_1 = to_char(get_byte(word, 1).to_ulong());
+                instruction.src_2 = to_char(get_byte(word, 0).to_ulong());
 
                 return instruction;
             }
@@ -868,7 +867,7 @@ namespace FIAT128
                     return false;
                 }
 
-                cache[index] = std::bitset<word_size>((uint32_t)instruction << 24 | (uint32_t)operand_1 << 16 | (uint32_t)operand_2 << 8 | (uint32_t)operand_3);
+                cache[index] = std::bitset<word_size>(u32(instruction) << 24 | u32(operand_1) << 16 | u32(operand_2) << 8 | u32(operand_3));
 
                 return true;
             }
@@ -937,7 +936,7 @@ namespace FIAT128
             bool interrupt_enabled = false;
             bool initialized = false;
 
-            size_t id = 0;
+            static size_t id = 0;
             BUS *bus = nullptr;
 
             /* instruction function definitions */
@@ -950,7 +949,7 @@ namespace FIAT128
 
                 for (size_t i = 0; i < input_size; i++)
                 {
-                    result[i] = ((bool)a[i]) ^ ((bool)b[i]) ^ overflow;
+                    result[i] = (to_bool(a[i])) ^ (to_bool(b[i])) ^ overflow;
                     overflow = (a[i] & b[i]) | (a[i] & overflow) | (b[i] & overflow);
                 }
 
@@ -1332,7 +1331,7 @@ namespace FIAT128
             }
 
             // instruction count
-            static const int instruction_count = 20;
+            static const char instruction_count = 20;
 
             // instrcution table
             static inline Instruction instruction_table[instruction_count] = {
@@ -1369,8 +1368,9 @@ namespace FIAT128
             bool new_instruction = true;
         };
 
-        CPU _0;
-        CPU cpus[cores];
+        CPU cpus[cores + 1];
+        Memory memory[memory_modules];
+
         BUS bus;
     };
 }; // FIAT128

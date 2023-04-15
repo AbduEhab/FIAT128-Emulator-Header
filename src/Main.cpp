@@ -2,23 +2,25 @@
 
 #include <FIAT128.hpp>
 
-constexpr float itr_sqrt(float n) // Note(AbduEhab): should be removed!!!
-{
-    unsigned long i;
-    float p0, p1;
+// constexpr float itr_sqrt(float n) // Note(AbduEhab): should be removed!!!
+// {
+//     unsigned long i;
+//     float p0, p1;
 
-    p0 = n;
+//     p0 = n;
 
-    i = *(unsigned long *)&p0;
+//     i = *(unsigned long *)&p0;
 
-    i = 0x1FBD3F7D + (i >> 1);
+//     i = 0x1FBD3F7D + (i >> 1);
 
-    p0 = *(float *)&i;
+//     p0 = *(float *)&i;
 
-    p1 = 0.5f * (p0 + n / p0);
+//     p1 = 0.5f * (p0 + n / p0);
 
-    return p1;
-}
+//     return p1;
+// }
+
+#ifndef FIAT128_IMPLEMENTATION
 
 int main([[maybe_unused]] int, [[maybe_unused]] char **)
 {
@@ -26,7 +28,7 @@ int main([[maybe_unused]] int, [[maybe_unused]] char **)
 
     TimedBlock block("Main functions");
 
-    auto Emulator = FIAT128::Emulator<1, 1>(0xFFFFFF);
+    auto Emulator = FIAT128::Emulator<1, 1>(0xFF);
 
     Emulator.add_word_to_cpu(0, 1, std::bitset<128>(2047));
     Emulator.add_word_to_cpu(0, 2, std::bitset<128>(0x1));
@@ -44,3 +46,5 @@ int main([[maybe_unused]] int, [[maybe_unused]] char **)
 
     return 0;
 }
+
+#endif // !FIAT128_IMPLEMENTATION
