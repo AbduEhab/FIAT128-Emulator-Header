@@ -220,7 +220,8 @@ namespace FIAT128
         SHR = u32(16),
         ROL = u32(17),
         ROR = u32(18),
-        HLT = u32(19),
+        INT = u32(19),
+        HLT = u32(20),
 
     };
     enum RegisterIndex
@@ -278,7 +279,7 @@ namespace FIAT128
          */
         auto set_word_in_memory(size_t channel, size_t index, std::bitset<word_size> value)
         {
-            bus.write(true, -1, channel, index, value);
+            bus.write(true, 0, channel, index, value);
         }
 
         /**
@@ -293,7 +294,7 @@ namespace FIAT128
         auto set_instruction_in_memory(size_t channel, size_t index, InstructionType type, RegisterIndex dest, RegisterIndex src_1 = RegisterIndex::R0, RegisterIndex src_2 = RegisterIndex::R0)
         {
             unsigned char instruction[4] = {to_uchar(type), to_uchar(dest), to_uchar(src_1), to_uchar(src_2)};
-            bus.write(true, -1, channel, index, instruction);
+            bus.write(true, 0, channel, index, instruction);
         }
 
         auto set_instruction_in_cpu(char cpu_id, short index, InstructionType type, RegisterIndex dest, RegisterIndex src_1 = RegisterIndex::R0, RegisterIndex src_2 = RegisterIndex::R0)
@@ -472,7 +473,7 @@ namespace FIAT128
             // move assignment
             BUS &operator=(BUS &&other) = default;
 
-            auto read(bool memory_operation, char id, size_t channel, size_t index) -> std::bitset<word_size>
+            auto read(bool memory_operation, size_t id, size_t channel, size_t index) -> std::bitset<word_size>
             {
                 if (memory_operation) [[likely]]
                 {
@@ -490,7 +491,7 @@ namespace FIAT128
                 return std::bitset<word_size>(0);
             }
 
-            auto write(bool memory_operation, char id, size_t channel, size_t index, std::bitset<word_size> value)
+            auto write(bool memory_operation, size_t id, size_t channel, size_t index, std::bitset<word_size> value)
             {
                 if (memory_operation) [[likely]]
                 {
@@ -506,7 +507,7 @@ namespace FIAT128
                 }
             }
 
-            auto write(bool memory_operation, char id, size_t channel, size_t index, unsigned char (&value)[4])
+            auto write(bool memory_operation, size_t id, size_t channel, size_t index, unsigned char (&value)[4])
             {
                 if (memory_operation) [[likely]]
                 {
@@ -1084,7 +1085,7 @@ namespace FIAT128
              */
             void LDA()
             {
-                reg[current_instruction.dest] = memory[reg[current_instruction.src_1].to_ulong()];
+                reg[current_instruction.dest] = bus->read(true, id, current_instruction.dest, reg[current_instruction.src_1].to_ulong());
 
                 if (is_bitset_zero(reg[current_instruction.dest]))
                     flag.set(2);
@@ -1099,7 +1100,7 @@ namespace FIAT128
              */
             void STA()
             {
-                memory[reg[current_instruction.dest].to_ulong()] = reg[current_instruction.src_1].to_ulong();
+                bus->write(true, id, current_instruction.src_2, current_instruction.dest, reg[current_instruction.src_1]);
 
                 debug_print(std::string("CPU ").append(std::to_string(id)), " STA executed");
             }
@@ -1142,7 +1143,7 @@ namespace FIAT128
              */
             void GRT()
             {
-                if (reg[current_instruction.src_1] < reg[current_instruction.src_2])
+                if (reg[current_instruction.src_1].to_ulong() < reg[current_instruction.src_2].to_ulong())
                     flag.set(3);
 
                 debug_print(std::string("CPU ").append(std::to_string(id)), " GRT executed");
@@ -1155,7 +1156,7 @@ namespace FIAT128
              */
             void SHL()
             {
-                for (int i = 0; i < 8; i++)
+                for (size_t i = 0; i < 8; i++)
                     reg[current_instruction.src_1][i] = reg[current_instruction.src_1][i + 1];
 
                 if (is_bitset_zero(reg[current_instruction.src_1]))
@@ -1173,7 +1174,7 @@ namespace FIAT128
              */
             void SHR()
             {
-                for (int i = 7; i > 0; i--)
+                for (size_t i = 7; i > 0; i--)
                     reg[current_instruction.src_1][i] = reg[current_instruction.src_1][i - 1];
 
                 if (is_bitset_zero(reg[current_instruction.src_1]))
@@ -1207,7 +1208,7 @@ namespace FIAT128
              *
              * @note the zero flag is set if the result is zero, and the sign flag is set if the result is negative
              */
-            void ROR()// Note(AbduEhab): Needs to be validated
+            void ROR() // Note(AbduEhab): Needs to be validated
             {
                 reg[current_instruction.src_1] >>= 1;
 
@@ -1218,6 +1219,23 @@ namespace FIAT128
                     flag.set(3);
 
                 debug_print(std::string("CPU ").append(std::to_string(id)), " ROR executed");
+            }
+
+            /**
+             * @brief Initializes the other CPUs
+             */
+            void INT()
+            {
+
+                for (size_t i = 1; i <= cores; i++)
+                {
+                    for (size_t j = 0; j < cache_size; j++)
+                    {
+                        bus->write(false, i, 0, j, bus->read(true, id, 0, cache_size * i + j));
+                    }
+                }
+
+                debug_print(std::string("CPU ").append(std::to_string(id)), " INT executed");
             }
 
             /**
@@ -1243,7 +1261,7 @@ namespace FIAT128
             }
 
             // instruction count
-            static const unsigned char instruction_count = 20;
+            static const unsigned char instruction_count = 21;
 
             // instrcution table
             static inline Instruction instruction_table[instruction_count] = {
@@ -1266,6 +1284,7 @@ namespace FIAT128
                 {"SHR", &CPU::SHR, 2},
                 {"ROL", &CPU::ROL, 2},
                 {"ROR", &CPU::ROR, 2},
+                {"INT", &CPU::INT, 2},
                 {"HLT", &CPU::HLT, 2},
             };
 

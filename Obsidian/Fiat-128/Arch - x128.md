@@ -150,3 +150,4 @@ mod = -a
 -   System instructions:
     
     -   HALT: Halt the processor.
+    -   INT: initialized the other CPUs

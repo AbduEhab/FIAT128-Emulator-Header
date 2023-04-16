@@ -6,16 +6,14 @@ kanban-plugin: basic
 
 ## Setup
 
-- [ ] Vulkan on linux
+
+
+## Planned Modules
+
+- [ ] VAU
 
 
 ## Design
-
-- [ ] VAU
-- [ ] CPU
-
-
-## Tests
 
 
 
@@ -23,14 +21,16 @@ kanban-plugin: basic
 
 
 
-## Modules
+## Tests
 
+- [ ] CPU
 
 
 ## Completed
 
 **Complete**
 - [x] Vs Code
+- [x] Vulkan on linux
 
 
 
