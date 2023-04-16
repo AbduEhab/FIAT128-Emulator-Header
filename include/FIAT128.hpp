@@ -70,6 +70,7 @@ namespace FIAT128
 
 #define u32(x) static_cast<uint32_t>(x)
 #define to_char(x) static_cast<char>(x)
+#define to_uchar(x) static_cast<unsigned char>(x)
 #define to_bool(x) static_cast<bool>(x)
 #define to_size_t(x) static_cast<size_t>(x)
 
@@ -291,7 +292,7 @@ namespace FIAT128
          */
         auto set_instruction_in_memory(size_t channel, size_t index, InstructionType type, RegisterIndex dest, RegisterIndex src_1 = RegisterIndex::R0, RegisterIndex src_2 = RegisterIndex::R0)
         {
-            char instruction[4] = {to_char(type), to_char(dest), to_char(src_1), to_char(src_2)};
+            unsigned char instruction[4] = {to_uchar(type), to_uchar(dest), to_uchar(src_1), to_uchar(src_2)};
             bus.write(true, -1, channel, index, instruction);
         }
 
@@ -370,7 +371,7 @@ namespace FIAT128
                 memory[index] = value;
             }
 
-            void write(size_t index, char (&value)[4])
+            void write(size_t index, unsigned char (&value)[4])
             {
                 std::lock_guard<std::mutex> lock(memory_mutex);
                 memory[index] = (std::bitset<word_size>(u32(value[0]) << 24 | u32(value[1]) << 16 | u32(value[2]) << 8 | u32(value[3]))) <<= 96;
@@ -505,7 +506,7 @@ namespace FIAT128
                 }
             }
 
-            auto write(bool memory_operation, char id, size_t channel, size_t index, char (&value)[4])
+            auto write(bool memory_operation, char id, size_t channel, size_t index, unsigned char (&value)[4])
             {
                 if (memory_operation) [[likely]]
                 {
@@ -656,8 +657,6 @@ namespace FIAT128
                         stack_pointer = interrupt_seg_index;
                     }
 
-                    debug_print("CPU: ", id);
-
                     if (step_mode)
                     {
                         switch (instruction_cycle)
@@ -763,10 +762,9 @@ namespace FIAT128
             struct Instruction
             {
                 std::string_view name;
-                // void (*opcode)(void) = nullptr;
                 void (FIAT128::Emulator<cores, memory_modules, word_size>::CPU::*opcode)() = nullptr;
-                char cycles = 0;
-                char dest = 0, src_1 = 0, src_2 = 0;
+                unsigned char cycles = 0;
+                unsigned char dest = 0, src_1 = 0, src_2 = 0;
 
                 /**
                  * @brief decodes an opcode into an instruction
@@ -776,10 +774,10 @@ namespace FIAT128
                  */
                 static auto decode_from_opcode(std::bitset<8> &opcode) -> Instruction
                 {
-                    auto opcode_as_char = to_char(opcode.to_ulong());
+                    auto opcode_as_char = to_uchar(opcode.to_ulong());
 
-                    if ((opcode_as_char > instruction_count) || opcode_as_char < 0)
-                        return instruction_table[instruction_count];
+                    if ((opcode_as_char > instruction_count) /* || opcode_as_char < 0 */)
+                        return instruction_table[instruction_count]; // HLT instruction
 
                     return instruction_table[opcode_as_char];
                 }
@@ -798,9 +796,9 @@ namespace FIAT128
                 std::bitset<8> opcode = get_byte(word, 3);
                 auto instruction = Instruction::decode_from_opcode(opcode);
 
-                instruction.dest = to_char(get_byte(word, 2).to_ulong());
-                instruction.src_1 = to_char(get_byte(word, 1).to_ulong());
-                instruction.src_2 = to_char(get_byte(word, 0).to_ulong());
+                instruction.dest = to_uchar(get_byte(word, 2).to_ulong());
+                instruction.src_1 = to_uchar(get_byte(word, 1).to_ulong());
+                instruction.src_2 = to_uchar(get_byte(word, 0).to_ulong());
 
                 return instruction;
             }
@@ -1075,9 +1073,9 @@ namespace FIAT128
              */
             void BUN()
             {
-                // stack_pointer
+                stack_pointer = current_instruction.dest;
 
-                debug_print("BUN executed\n", "");
+                debug_print(std::string("CPU ").append(std::to_string(id)), " BUN executed");
             }
 
             /**
@@ -1312,7 +1310,7 @@ namespace FIAT128
             }
 
             // instruction count
-            static const char instruction_count = 20;
+            static const unsigned char instruction_count = 20;
 
             // instrcution table
             static inline Instruction instruction_table[instruction_count] = {
