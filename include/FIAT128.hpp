@@ -540,9 +540,12 @@ namespace FIAT128
                 id = id_counter++;
                 bus = extern_bus;
                 decrement(stack_pointer);
+                decrement(timer);
 
                 if (id == 0)
                     flag.reset(1);
+                else
+                    flag.set(4);
             }
 
             auto set_bus(BUS *extern_bus) -> void
@@ -619,25 +622,22 @@ namespace FIAT128
                     return;
                 }
 
-                if (id == 0) [[unlikely]]
+                if (id == 0 && !initialized) [[unlikely]]
                 {
-                    if (!initialized)
+                    if (flag[1] == 1) [[unlikely]]
                     {
-                        if (flag[1] == 1) [[unlikely]]
-                        {
-                            flag.reset(1);
-                            initialized = true;
-                            goto emerg_break;
-                        }
-
-                        total_cpu_cycles++;
-
-                        cache[stack_pointer.to_ulong()] = bus->read(true, 0, id, stack_pointer.to_ulong());
-
-                        decrement(stack_pointer);
-                        decrement(timer);
-                        return;
+                        flag.reset(1);
+                        initialized = true;
+                        goto emerg_break;
                     }
+
+                    total_cpu_cycles++;
+
+                    cache[stack_pointer.to_ulong()] = bus->read(true, 0, id, stack_pointer.to_ulong());
+
+                    decrement(stack_pointer);
+                    decrement(timer);
+                    return;
                 }
                 else
                 {
@@ -645,7 +645,7 @@ namespace FIAT128
 
                     if ((flag & std::bitset<8>(0).set(4)).to_ulong() > 0)
                     {
-                        debug_print("CPU halted\n", "");
+                        debug_print(std::string("CPU ").append(std::to_string(id)), " halted");
                         return;
                     }
 
