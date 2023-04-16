@@ -235,6 +235,14 @@ namespace FIAT128
         TIMER = u32(8),
     };
 
+    static size_t id_counter = 0;
+
+#ifdef DEBUG_CACHE
+    constexpr static int cache_size = 8;
+#else
+    constexpr static int cache_size = 2048;
+#endif
+
     template <size_t cores, size_t memory_modules, size_t word_size = 128>
     struct Emulator
     {
@@ -243,9 +251,6 @@ namespace FIAT128
         {
             for (size_t i = 0; i < memory_modules; i++)
                 memory[i] = Memory(to_size_t(memory_size));
-
-            for (size_t i = 0; i <= cores; i++)
-                cpus[i] = CPU(i, nullptr);
 
             bus = BUS(memory, cpus);
 
@@ -270,9 +275,9 @@ namespace FIAT128
          *
          * @note is thread safe
          */
-        auto set_word(size_t channel, size_t index, std::bitset<word_size> value)
+        auto set_word_in_memory(size_t channel, size_t index, std::bitset<word_size> value)
         {
-            bus.write(channel, index, value);
+            bus.write(true, -1, channel, index, value);
         }
 
         /**
@@ -284,19 +289,19 @@ namespace FIAT128
          *
          * @note is thread safe
          */
-        auto add_instruction(size_t channel, size_t index, InstructionType type, RegisterIndex dest, RegisterIndex src_1 = RegisterIndex::R0, RegisterIndex src_2 = RegisterIndex::R0)
+        auto set_instruction_in_memory(size_t channel, size_t index, InstructionType type, RegisterIndex dest, RegisterIndex src_1 = RegisterIndex::R0, RegisterIndex src_2 = RegisterIndex::R0)
         {
             char instruction[4] = {to_char(type), to_char(dest), to_char(src_1), to_char(src_2)};
-            bus.write(channel, index, instruction);
+            bus.write(true, -1, channel, index, instruction);
         }
 
-        auto add_instruction_to_cpu(char cpu_id, short index, InstructionType type, RegisterIndex dest, RegisterIndex src_1 = RegisterIndex::R0, RegisterIndex src_2 = RegisterIndex::R0)
+        auto set_instruction_in_cpu(char cpu_id, short index, InstructionType type, RegisterIndex dest, RegisterIndex src_1 = RegisterIndex::R0, RegisterIndex src_2 = RegisterIndex::R0)
         {
             if (to_size_t(cpu_id) < cores)
                 cpus[to_size_t(cpu_id)].add_instruction(index, type, dest, src_1, src_2);
         }
 
-        auto add_word_to_cpu(char cpu_id, short index, std::bitset<word_size> value)
+        auto set_word_in_cpu(char cpu_id, short index, std::bitset<word_size> value)
         {
             if (to_size_t(cpu_id) < cores)
                 cpus[to_size_t(cpu_id)].add_word(index, value);
@@ -368,7 +373,16 @@ namespace FIAT128
             void write(size_t index, char (&value)[4])
             {
                 std::lock_guard<std::mutex> lock(memory_mutex);
-                memory[index] = std::bitset<word_size>(u32(value[0]) << 24 | u32(value[1]) << 16 | u32(value[2]) << 8 | u32(value[3]));
+                memory[index] = (std::bitset<word_size>(u32(value[0]) << 24 | u32(value[1]) << 16 | u32(value[2]) << 8 | u32(value[3]))) <<= 96;
+            }
+
+            auto set_word(short index, std::bitset<word_size> word) -> bool
+            {
+                assert(index < cache_size);
+
+                memory[index] = word;
+
+                return true;
             }
 
             std::vector<std::bitset<word_size>> memory;
@@ -461,13 +475,13 @@ namespace FIAT128
             {
                 if (memory_operation) [[likely]]
                 {
-                    assert(channel < channels);
+                    assert(channel <= channels);
 
                     return memory[channel]->read(index);
                 }
                 else if (id == 0)
                 {
-                    assert((channel <= cores) && (channel != 0) && (index < 2028));
+                    assert((channel <= cores) && (index < cache_size));
 
                     return cpus[channel]->cache[index];
                 }
@@ -487,7 +501,7 @@ namespace FIAT128
                 else if (id == 0)
                 {
                     std::lock_guard<std::mutex> lock(cpu_mutex);
-                    cpus[channel].cache[index] = value;
+                    cpus[channel]->cache[index] = value;
                 }
             }
 
@@ -502,7 +516,7 @@ namespace FIAT128
                 else if (id == 0)
                 {
                     std::lock_guard<std::mutex> lock(cpu_mutex);
-                    cpus[channel].cache[index] = std::bitset<word_size>(u32(value[0]) << 24 | u32(value[1]) << 16 | u32(value[2]) << 8 | u32(value[3]));
+                    cpus[channel]->cache[index] = (std::bitset<word_size>(u32(value[0]) << 24 | u32(value[1]) << 16 | u32(value[2]) << 8 | u32(value[3]))) <<= 96;
                 }
             }
 
@@ -521,12 +535,14 @@ namespace FIAT128
         struct CPU
         {
 
-            CPU() = default;
-
-            CPU(size_t assigned_id, BUS *extern_bus = nullptr) : id(assigned_id), bus(extern_bus)
+            CPU(BUS *extern_bus = nullptr) : bus(extern_bus)
             {
+                id = id_counter++;
+                bus = extern_bus;
                 decrement(stack_pointer);
-                id++;
+
+                if (id == 0)
+                    flag.reset(1);
             }
 
             auto set_bus(BUS *extern_bus) -> void
@@ -597,7 +613,7 @@ namespace FIAT128
             // execute instruction
             auto execute_instruction(bool step_mode = 0) -> void
             {
-                if (!bus)
+                if (!this->bus)
                 {
                     std::cerr << "Bus not connected" << std::endl;
                     return;
@@ -605,62 +621,29 @@ namespace FIAT128
 
                 if (id == 0) [[unlikely]]
                 {
-                    if (step_mode)
+                    if (!initialized)
                     {
-                        switch (instruction_cycle)
+                        if (flag[1] == 1) [[unlikely]]
                         {
-                        case 0:
-
-                            if (!initialized)
-                            {
-                                {
-                                    total_cpu_cycles++;
-
-                                    cache[stack_pointer.to_ulong()] = bus->read(false, 0, id, stack_pointer.to_ulong());
-                                }
-
-                                {
-                                    total_cpu_cycles++;
-
-                                    if (flag[1] == 1) [[unlikely]]
-                                    {
-                                        flag.reset(1);
-                                        initialized = true;
-                                        return;
-                                    }
-                                }
-                            }
-
-                            total_cpu_cycles++;
-                            instruction_cycle = 1;
-
-                            current_word = cache[stack_pointer.to_ulong()];
-                            acc = to_xbits<32>(current_word);
-                            current_instruction = decode_instruction(acc);
-
-                            decrement(stack_pointer);
-                            decrement(timer);
-
-                            break;
-
-                        case 1:
-
-                            total_cpu_cycles++;
-                            instruction_cycle = 2;
-
-                            current_word = cache[stack_pointer.to_ulong()];
-                            acc = to_xbits<32>(current_word);
-                            current_instruction = decode_instruction(acc);
-
-                            decrement(stack_pointer);
-                            decrement(timer);
+                            flag.reset(1);
+                            initialized = true;
+                            goto emerg_break;
                         }
+
+                        total_cpu_cycles++;
+
+                        cache[stack_pointer.to_ulong()] = bus->read(true, 0, id, stack_pointer.to_ulong());
+
+                        decrement(stack_pointer);
+                        decrement(timer);
+                        return;
                     }
                 }
                 else
                 {
+                emerg_break:
 
-                    if (((flag & std::bitset<8>(0).set(4)) == std::bitset<8>(0).set(4)))
+                    if ((flag & std::bitset<8>(0).set(4)).to_ulong() > 0)
                     {
                         debug_print("CPU halted\n", "");
                         return;
@@ -673,7 +656,7 @@ namespace FIAT128
                         stack_pointer = interrupt_seg_index;
                     }
 
-                    print_by_force("CPU: ", id);
+                    debug_print("CPU: ", id);
 
                     if (step_mode)
                     {
@@ -695,7 +678,6 @@ namespace FIAT128
                             acc = to_xbits<32>(current_word);
                             current_instruction = decode_instruction(acc);
 
-                            total_cpu_cycles++;
                             decrement(stack_pointer);
                             decrement(timer);
                             break;
@@ -852,7 +834,7 @@ namespace FIAT128
 
                 for (size_t i = 0; i < 8; i++)
                 {
-                    result[i] = word[((input_size / 8) - byte - 1) * 8 + i];
+                    result[i] = word[byte * 8 + i];
                 }
 
                 return result;
@@ -874,7 +856,7 @@ namespace FIAT128
 
             auto add_word(short index, std::bitset<word_size> word) -> bool
             {
-                assert(index < 2048);
+                assert(index < cache_size);
 
                 if (!bus)
                 {
@@ -909,7 +891,7 @@ namespace FIAT128
             }
 
             // cpu cache
-            std::bitset<word_size> cache[2048];
+            std::bitset<word_size> cache[cache_size];
 
             // 128-bit general purpose registers [R0-R7, 6 & 7 are vector registers, 8 is a non-programable temp register]
             std::bitset<word_size> reg[9];
@@ -921,13 +903,13 @@ namespace FIAT128
             std::bitset<word_size> timer;
 
             // Stack pointer [to index the cache]
-            std::bitset<11> stack_pointer;
+            std::bitset<u32(std::log2(cache_size))> stack_pointer;
 
             // Segment index (interrupt)
-            std::bitset<11> interrupt_seg_index;
+            std::bitset<u32(std::log2(cache_size))> interrupt_seg_index;
 
             // return addresses stack
-            std::bitset<11> return_address[16];
+            std::bitset<u32(std::log2(cache_size))> return_address[16];
 
             // Accumulator - temp register, not visible to the user
             std::bitset<32> acc;
@@ -936,7 +918,7 @@ namespace FIAT128
             bool interrupt_enabled = false;
             bool initialized = false;
 
-            static size_t id = 0;
+            size_t id = 0;
             BUS *bus = nullptr;
 
             /* instruction function definitions */
@@ -1093,8 +1075,7 @@ namespace FIAT128
              */
             void BUN()
             {
-                XXX();
-                // pc = current_word.get_address();
+                // stack_pointer
 
                 debug_print("BUN executed\n", "");
             }

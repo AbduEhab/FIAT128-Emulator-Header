@@ -1,4 +1,4 @@
-// #define STATIC_MEMORY
+#define DEBUG_CACHE
 
 #include <FIAT128.hpp>
 
@@ -28,13 +28,13 @@ int main([[maybe_unused]] int, [[maybe_unused]] char **)
 
     TimedBlock block("Main functions");
 
-    auto Emulator = FIAT128::Emulator<1, 1>(0xFF);
+    auto Emulator = FIAT128::Emulator<1, 1>(0x8);
 
-    Emulator.add_word_to_cpu(0, 1, std::bitset<128>(2047));
-    Emulator.add_word_to_cpu(0, 2, std::bitset<128>(0x1));
-    Emulator.add_word_to_cpu(0, 3, std::bitset<128>(0x2));
-    Emulator.add_instruction_to_cpu(0, 0, FIAT128::InstructionType::BUN, FIAT128::RegisterIndex::R0);
-    Emulator.add_instruction_to_cpu(0, 0, FIAT128::InstructionType::MOV, FIAT128::RegisterIndex::R0, FIAT128::RegisterIndex::R0);
+    Emulator.set_word_in_memory(0, 0, std::bitset<128>(5));
+    Emulator.set_word_in_memory(0, 1, std::bitset<128>(0x1));
+    Emulator.set_word_in_memory(0, 2, std::bitset<128>(0x2));
+    Emulator.set_instruction_in_memory(0, 7, FIAT128::InstructionType::BUN, FIAT128::RegisterIndex::R0);
+    Emulator.set_instruction_in_memory(0, 6, FIAT128::InstructionType::MOV, FIAT128::RegisterIndex::R0, FIAT128::RegisterIndex::R0);
 
     // Emulator.set_word(0, 0xFFFF00, 1);
     // Emulator.add_instruction(0, 0xFFFFFF - 1, FIAT128::InstructionType::ADD, FIAT128::RegisterIndex::R0, FIAT128::RegisterIndex::R0, FIAT128::RegisterIndex::R1);
