@@ -657,6 +657,9 @@ namespace FIAT128
                         stack_pointer = interrupt_seg_index;
                     }
 
+                    if (new_instruction)
+                        new_instruction = false;
+
                     if (step_mode)
                     {
                         switch (instruction_cycle)
@@ -695,29 +698,7 @@ namespace FIAT128
                             // execute instruction
                             (this->*current_instruction.opcode)();
 
-                            if (current_instruction.cycles != 2) [[likely]]
-                            {
-                                instruction_cycle = 0;
-                                new_instruction = true;
-                                break;
-                            }
-
-                            decrement(timer);
-                            break;
-
-                        case 2:
-
-                            if (timer == 0) [[unlikely]]
-                            {
-                                interrupt_enabled = true;
-                                flag.set(0);
-                            }
-
-                            instruction_cycle = 0;
-                            total_cpu_cycles++;
-
-                            // execute instruction
-                            (this->*current_instruction.opcode)();
+                            new_instruction = true;
 
                             decrement(timer);
                             break;
@@ -985,12 +966,12 @@ namespace FIAT128
                 if (is_bitset_zero(result.first))
                     flag.set(2);
 
-                if (is_bitset_positive(result.first))
+                if (!is_bitset_positive(result.first))
                     flag.set(3);
 
                 reg[current_instruction.dest] = result.first;
 
-                debug_print("ADD executed\n", "");
+                debug_print(std::string("CPU ").append(std::to_string(id)), " ADD executed");
             }
 
             /**
@@ -1000,18 +981,14 @@ namespace FIAT128
              */
             void AND()
             {
-                XXX();
-                // reg[current_word.get_byte(2).get_value()] = reg[current_word.get_byte(1).get_value()] & reg[current_word.get_byte(0).get_value()];
+                reg[current_instruction.dest] = reg[current_instruction.src_1] & reg[current_instruction.src_2];
 
-                // bool is_zero = reg[current_word.get_byte(2).get_value()].is_zero();
-                // bool sign = reg[current_word.get_byte(2).get_value()].get_bit(0);
+                if (is_bitset_zero(reg[current_instruction.dest]))
+                    flag.set(2);
+                if (!is_bitset_positive(reg[current_instruction.dest]))
+                    flag.set(3);
 
-                // flag = flag & 0b1111'0011;
-
-                // flag = flag | (is_zero << 2);
-                // flag = flag | (sign << 3);
-
-                debug_print("AND executed\n", "");
+                debug_print(std::string("CPU ").append(std::to_string(id)), " AND executed");
             }
 
             /**
@@ -1021,18 +998,15 @@ namespace FIAT128
              */
             void OR()
             {
-                XXX();
-                // reg[current_word.get_byte(2).get_value()] = reg[current_word.get_byte(1).get_value()] | reg[current_word.get_byte(0).get_value()];
+                reg[current_instruction.dest] = reg[current_instruction.src_1] | reg[current_instruction.src_2];
 
-                // bool is_zero = reg[current_word.get_byte(2).get_value()].is_zero();
-                // bool sign = reg[current_word.get_byte(2).get_value()].get_bit(0);
+                if (is_bitset_zero(reg[current_instruction.dest]))
+                    flag.set(2);
 
-                // flag = flag & 0b1111'0011;
+                if (!is_bitset_positive(reg[current_instruction.dest]))
+                    flag.set(3);
 
-                // flag = flag | (is_zero << 2);
-                // flag = flag | (sign << 3);
-
-                debug_print("OR executed\n", "");
+                debug_print(std::string("CPU ").append(std::to_string(id)), " OR executed");
             }
 
             /**
@@ -1042,18 +1016,15 @@ namespace FIAT128
              */
             void XOR()
             {
-                XXX();
-                // reg[current_word.get_byte(2).get_value()] = reg[current_word.get_byte(1).get_value()] ^ reg[current_word.get_byte(0).get_value()];
+                reg[current_instruction.dest] = reg[current_instruction.src_1] ^ reg[current_instruction.src_2];
 
-                // bool is_zero = reg[current_word.get_byte(2).get_value()].is_zero();
-                // bool sign = reg[current_word.get_byte(2).get_value()].get_bit(0);
+                if (is_bitset_zero(reg[current_instruction.dest]))
+                    flag.set(2);
 
-                // flag = flag & 0b1111'0011;
+                if (!is_bitset_positive(reg[current_instruction.dest]))
+                    flag.set(3);
 
-                // flag = flag | (is_zero << 2);
-                // flag = flag | (sign << 3);
-
-                debug_print("XOR executed\n", "");
+                debug_print(std::string("CPU ").append(std::to_string(id)), " XOR executed");
             }
 
             /**
@@ -1065,7 +1036,13 @@ namespace FIAT128
             {
                 reg[current_instruction.dest] = reg[current_instruction.src_1];
 
-                debug_print("MOV executed\n", "");
+                if (is_bitset_zero(reg[current_instruction.dest]))
+                    flag.set(2);
+
+                if (!is_bitset_positive(reg[current_instruction.dest]))
+                    flag.set(3);
+
+                debug_print(std::string("CPU ").append(std::to_string(id)), " MOV executed");
             }
 
             /**
@@ -1073,7 +1050,7 @@ namespace FIAT128
              */
             void BUN()
             {
-                stack_pointer = current_instruction.dest;
+                stack_pointer = reg[current_instruction.dest].to_ulong();
 
                 debug_print(std::string("CPU ").append(std::to_string(id)), " BUN executed");
             }
@@ -1083,15 +1060,10 @@ namespace FIAT128
              */
             void BIZ()
             {
-                XXX();
-                // if ((flag & 0b0000'0100) > 0)
-                // {
-                //     pc = current_word.get_address();
+                if ((flag & std::bitset<8>(0).set(2)).to_ulong() > 0)
+                    stack_pointer = reg[current_instruction.dest].to_ulong();
 
-                //     debug_print("BIZ executed\n", "");
-                // }
-
-                debug_print("BIZ did not execute\n", "");
+                debug_print(std::string("CPU ").append(std::to_string(id)), " BIZ executed");
             }
 
             /**
@@ -1099,15 +1071,10 @@ namespace FIAT128
              */
             void BIN()
             {
-                XXX();
-                // if ((flag & 0b0000'0100) == 0)
-                // {
-                //     pc = current_word.get_address();
+                if ((flag & std::bitset<8>(0).set(3)).to_ulong() > 0)
+                    stack_pointer = reg[current_instruction.dest].to_ulong();
 
-                //     debug_print("BNZ executed\n", "");
-                // }
-
-                debug_print("BNZ did not execute\n", "");
+                debug_print(std::string("CPU ").append(std::to_string(id)), " BIN executed");
             }
 
             /**
@@ -1117,18 +1084,14 @@ namespace FIAT128
              */
             void LDA()
             {
-                XXX();
-                // reg[current_word.get_byte(2).get_value()] = memory[current_word.get_address().get_value()];
+                reg[current_instruction.dest] = memory[reg[current_instruction.src_1].to_ulong()];
 
-                // bool is_zero = reg[current_word.get_byte(2).get_value()].is_zero();
-                // bool sign = reg[current_word.get_byte(2).get_value()].get_bit(0);
+                if (is_bitset_zero(reg[current_instruction.dest]))
+                    flag.set(2);
+                if (!is_bitset_positive(reg[current_instruction.dest]))
+                    flag.set(3);
 
-                // flag = flag & 0b1111'0011;
-
-                // flag = flag | (is_zero << 2);
-                // flag = flag | (sign << 3);
-
-                debug_print("LDA executed\n", "");
+                debug_print(std::string("CPU ").append(std::to_string(id)), " LDA executed");
             }
 
             /**
@@ -1136,10 +1099,9 @@ namespace FIAT128
              */
             void STA()
             {
-                XXX();
-                // memory[current_word.get_address().get_value()] = reg[current_word.get_byte(2).get_value()];
+                memory[reg[current_instruction.dest].to_ulong()] = reg[current_instruction.src_1].to_ulong();
 
-                debug_print("STA executed\n", "");
+                debug_print(std::string("CPU ").append(std::to_string(id)), " STA executed");
             }
 
             /**
@@ -1151,7 +1113,7 @@ namespace FIAT128
             {
                 reg[current_instruction.dest] = cache[reg[current_instruction.src_1].to_ulong()];
 
-                debug_print("LDR executed\n", "");
+                debug_print(std::string("CPU ").append(std::to_string(id)), " LDR executed");
             }
 
             /**
@@ -1159,10 +1121,9 @@ namespace FIAT128
              */
             void STR()
             {
-                XXX();
-                // memory[current_word.get_address().get_value()] = reg[current_word.get_byte(2).get_value()];
+                cache[reg[current_instruction.dest].to_ulong()] = reg[current_instruction.src_1].to_ulong();
 
-                debug_print("STR executed\n", "");
+                debug_print(std::string("CPU ").append(std::to_string(id)), " STR executed");
             }
 
             /**
@@ -1170,39 +1131,21 @@ namespace FIAT128
              */
             void EQL()
             {
-                XXX();
-                // reg[current_word.get_byte(2).get_value()] = reg[current_word.get_byte(1).get_value()] - reg[current_word.get_byte(0).get_value()];
+                if (reg[current_instruction.src_1] == reg[current_instruction.src_2])
+                    flag.set(2);
 
-                // if (reg[current_word.get_byte(2).get_value()].is_zero())
-                // {
-                //     flag = flag | 0b0000'0100;
-                // }
-                // else
-                // {
-                //     flag = flag & 0b1111'1011;
-                // }
-
-                debug_print("EQ executed\n", "");
+                debug_print(std::string("CPU ").append(std::to_string(id)), " EQL executed");
             }
 
             /**
              * @brief compares two registers and sets the sign flag if the first register is greater than the second register
              */
-            void GRT() // Note(AbduEhab): needs to be revised
+            void GRT()
             {
-                XXX();
-                // reg[current_word.get_byte(2).get_value()] = reg[current_word.get_byte(1).get_value()] - reg[current_word.get_byte(0).get_value()];
+                if (reg[current_instruction.src_1] < reg[current_instruction.src_2])
+                    flag.set(3);
 
-                // if (reg[current_word.get_byte(2).get_value()].get_bit(0))
-                // {
-                //     flag = flag | 0b0000'1000;
-                // }
-                // else
-                // {
-                //     flag = flag & 0b1111'0111;
-                // }
-
-                debug_print("GT executed\n", "");
+                debug_print(std::string("CPU ").append(std::to_string(id)), " GRT executed");
             }
 
             /**
@@ -1212,18 +1155,15 @@ namespace FIAT128
              */
             void SHL()
             {
-                XXX();
-                // reg[current_word.get_byte(2).get_value()] = (reg[current_word.get_byte(2).get_value()] << 1);
+                for (int i = 0; i < 8; i++)
+                    reg[current_instruction.src_1][i] = reg[current_instruction.src_1][i + 1];
 
-                // bool is_zero = reg[current_word.get_byte(2).get_value()].is_zero();
-                // bool sign = reg[current_word.get_byte(2).get_value()].get_bit(0);
+                if (is_bitset_zero(reg[current_instruction.src_1]))
+                    flag.set(2);
+                if (!is_bitset_positive(reg[current_instruction.src_1]))
+                    flag.set(3);
 
-                // flag = flag & 0b1111'0011;
-
-                // flag = flag | (is_zero << 2);
-                // flag = flag | (sign << 3);
-
-                debug_print("SHL executed\n", "");
+                debug_print(std::string("CPU ").append(std::to_string(id)), " SHL executed");
             }
 
             /**
@@ -1233,18 +1173,15 @@ namespace FIAT128
              */
             void SHR()
             {
-                XXX();
-                // reg[current_word.get_byte(2).get_value()] = (reg[current_word.get_byte(2).get_value()] >> 1);
+                for (int i = 7; i > 0; i--)
+                    reg[current_instruction.src_1][i] = reg[current_instruction.src_1][i - 1];
 
-                // bool is_zero = reg[current_word.get_byte(2).get_value()].is_zero();
-                // bool sign = reg[current_word.get_byte(2).get_value()].get_bit(0);
+                if (is_bitset_zero(reg[current_instruction.src_1]))
+                    flag.set(2);
+                if (!is_bitset_positive(reg[current_instruction.src_1]))
+                    flag.set(3);
 
-                // flag = flag & 0b1111'0011;
-
-                // flag = flag | (is_zero << 2);
-                // flag = flag | (sign << 3);
-
-                debug_print("SHR executed\n", "");
+                debug_print(std::string("CPU ").append(std::to_string(id)), " SHR executed");
             }
 
             /**
@@ -1252,20 +1189,17 @@ namespace FIAT128
              *
              * @note the zero flag is set if the result is zero, and the sign flag is set if the result is negative
              */
-            void ROL()
+            void ROL() // Note(AbduEhab): Needs to be validated
             {
-                XXX();
-                // reg[current_word.get_byte(2).get_value()] = (reg[current_word.get_byte(2).get_value()] << 1) | (reg[current_word.get_byte(2).get_value()].get_bit(128));
+                reg[current_instruction.src_1] <<= 1;
 
-                // bool is_zero = reg[current_word.get_byte(2).get_value()].is_zero();
-                // bool sign = reg[current_word.get_byte(2).get_value()].get_bit(0);
+                if (is_bitset_zero(reg[current_instruction.src_1]))
+                    flag.set(2);
 
-                // flag = flag & 0b1111'0011;
+                if (!is_bitset_positive(reg[current_instruction.src_1]))
+                    flag.set(3);
 
-                // flag = flag | (is_zero << 2);
-                // flag = flag | (sign << 3);
-
-                debug_print("ROL executed\n", "");
+                debug_print(std::string("CPU ").append(std::to_string(id)), " ROL executed");
             }
 
             /**
@@ -1273,20 +1207,17 @@ namespace FIAT128
              *
              * @note the zero flag is set if the result is zero, and the sign flag is set if the result is negative
              */
-            void ROR()
+            void ROR()// Note(AbduEhab): Needs to be validated
             {
-                XXX();
-                // reg[Byte::get_byte(current_word, 2).get_value()] = (reg[Byte::get_byte(current_word, 2).get_value()] >> 1) | (reg[Byte::get_byte(current_word, 2).get_value()][0] << (128 - 1));
+                reg[current_instruction.src_1] >>= 1;
 
-                // bool is_zero = reg[Byte::get_byte(current_word, 2).get_value()] == 0;
-                // bool sign = reg[Byte::get_byte(current_word, 2).get_value()][0];
+                if (is_bitset_zero(reg[current_instruction.src_1]))
+                    flag.set(2);
 
-                // flag = flag & 0b1111'0011;
+                if (!is_bitset_positive(reg[current_instruction.src_1]))
+                    flag.set(3);
 
-                // flag = flag | (is_zero << 2);
-                // flag = flag | (sign << 3);
-
-                debug_print("ROR executed\n", "");
+                debug_print(std::string("CPU ").append(std::to_string(id)), " ROR executed");
             }
 
             /**
@@ -1295,7 +1226,8 @@ namespace FIAT128
             void HLT()
             {
                 flag |= 0b0001'0000;
-                debug_print("HLT executed\n", "");
+
+                debug_print(std::string("CPU ").append(std::to_string(id)), " HLT executed");
             }
 
             /**
@@ -1306,7 +1238,8 @@ namespace FIAT128
             void XXX()
             {
                 HLT();
-                debug_print("Invalid instruction\n", "");
+
+                debug_print(std::string("CPU ").append(std::to_string(id)), " Invalid instruction called");
             }
 
             // instruction count
@@ -1321,8 +1254,8 @@ namespace FIAT128
                 {"XOR", &CPU::XOR, 2},
                 {"MOV", &CPU::MOV, 2},
                 {"BUN", &CPU::BUN, 2},
-                {"BIZ", &CPU::BIZ, 3},
-                {"BIN", &CPU::BIN, 3},
+                {"BIZ", &CPU::BIZ, 2},
+                {"BIN", &CPU::BIN, 2},
                 {"LDA", &CPU::LDA, 2},
                 {"STA", &CPU::STA, 2},
                 {"LDA", &CPU::LDR, 2},
