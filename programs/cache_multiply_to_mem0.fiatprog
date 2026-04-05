@@ -1,0 +1,82 @@
+# Multiplies two numbers from the ROM bootstrap image and writes the result to RAM (module 1), address 0.
+# Uses repeated addition: result += multiplicand while counter > 0.
+# Module map:
+#   M0 = ROM
+#   M1 = RAM
+#   M2 = OUTPUT CONSOLE
+#   M3 = GPU
+# Register plan:
+#   R1 = multiplicand
+#   R2 = loop counter (multiplier)
+#   R3 = running result
+#   R4 = zero constant
+#   R5 = -1 constant (for decrement)
+#   R6 = temporary pointer / branch target
+#   R7 = temporary pointer
+
+NAME Cache Multiply To Mem0
+DESCRIPTION CPU0 copies this ROM image into CPU1 cache; CPU1 multiplies values at image slots 40 and 41, stores the result in RAM module 1 slot 0, then writes RES=<two decimal digits> to output console module 2.
+
+# Data and constants (placed in ROM, module 0)
+WORD 0   0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF    # -1 (two's complement)
+WORD 1   0x28                                  # pointer to cache slot 40
+WORD 2   0x29                                  # pointer to cache slot 41
+WORD 3   0x0                                   # zero constant
+WORD 4   0x71                                  # multiply loop register target (lands on 112)
+WORD 5   0x52                                  # 'R'
+WORD 6   0x45                                  # 'E'
+WORD 7   0x53                                  # 'S'
+WORD 8   0x3D                                  # '='
+WORD 9   0x30                                  # '0'
+WORD 10  0x1                                   # +1
+WORD 11  0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF6    # -10
+WORD 12  0x9                                   # 9
+WORD 13  0x64                                  # decimal loop register target (lands on 99)
+WORD 14  0x60                                  # decimal loop register target (lands on 95)
+
+# Input values in ROM image (copied to CPU1 cache during INT bootstrap)
+WORD 40  0x7                                   # multiplicand image value
+WORD 41  0x6                                   # multiplier image value
+
+# Program (entry point is highest instruction index)
+INSTR 120 LDA R6 M0 1                          # R6 <- mem[1]  (=40)
+INSTR 119 LDR R1 R6 R0                         # R1 <- cache[R6] (multiplicand)
+INSTR 118 LDA R7 M0 2                          # R7 <- mem[2]  (=41)
+INSTR 117 LDR R2 R7 R0                         # R2 <- cache[R7] (multiplier / counter)
+INSTR 116 MOV R3 R0 R0                         # R3 <- 0 (clear result accumulator)
+INSTR 115 LDA R5 M0 0                          # R5 <- -1
+INSTR 114 LDA R4 M0 3                          # R4 <- 0
+INSTR 113 LDA R6 M0 4                          # R6 <- branch register target for INSTR 112
+INSTR 112 ADD R3 R3 R1                         # R3 += R1
+INSTR 111 ADD R2 R2 R5                         # R2 += (-1)  (decrement)
+INSTR 110 GRT R0 R4 R2                         # compare 0 against R2 (SIGN set while R2 > 0)
+INSTR 109 BNZ R6 R0 R0                         # if counter still > 0, branch to INSTR 112
+INSTR 108 STA R3 M1 0                          # RAM[0] <- R3 (final product)
+INSTR 107 MOV R7 R3 R0                         # R7 <- result (decimal remainder)
+INSTR 106 MOV R6 R4 R0                         # R6 <- 0 (decimal tens counter)
+INSTR 105 LDA R1 M0 10                         # R1 <- +1
+INSTR 104 LDA R2 M0 11                         # R2 <- -10
+INSTR 103 LDA R5 M0 12                         # R5 <- 9
+INSTR 102 LDA R0 M0 14                         # R0 <- branch register target for INSTR 95
+INSTR 101 BUN R0 R0 R0                         # jump to decimal loop check
+INSTR 99 ADD R7 R7 R2                          # remainder -= 10
+INSTR 98 ADD R6 R6 R1                          # tens += 1
+INSTR 97 LDA R0 M0 14                          # R0 <- branch register target for INSTR 95
+INSTR 96 BUN R0 R0 R0                          # loop back to check
+INSTR 95 GRT R3 R5 R7                          # SIGN set when 9 < remainder (i.e. remainder >= 10)
+INSTR 94 LDA R0 M0 13                          # R0 <- branch register target for INSTR 99
+INSTR 93 BNZ R0 R0 R0                          # if remainder >= 10, continue decimal loop
+INSTR 92 LDA R0 M0 5                           # 'R'
+INSTR 91 STA R0 M2 0                           # CONSOLE[0] <- 'R'
+INSTR 90 LDA R0 M0 6                           # 'E'
+INSTR 89 STA R0 M2 1                           # CONSOLE[1] <- 'E'
+INSTR 88 LDA R0 M0 7                           # 'S'
+INSTR 87 STA R0 M2 2                           # CONSOLE[2] <- 'S'
+INSTR 86 LDA R0 M0 8                           # '='
+INSTR 85 STA R0 M2 3                           # CONSOLE[3] <- '='
+INSTR 84 LDA R0 M0 9                           # R0 <- '0'
+INSTR 83 ADD R6 R6 R0                          # tens ascii digit
+INSTR 82 ADD R7 R7 R0                          # ones ascii digit
+INSTR 81 STA R6 M2 4                           # CONSOLE[4] <- tens digit
+INSTR 80 STA R7 M2 5                           # CONSOLE[5] <- ones digit
+INSTR 79 HLT R0 R0 R0                          # stop execution

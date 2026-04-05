@@ -109,9 +109,17 @@ add_subdirectory(
     src
 )
 
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(SDL2 REQUIRED IMPORTED_TARGET sdl2)
+target_link_libraries(${PROJECT_NAME} PRIVATE PkgConfig::SDL2)
+
 # Comment these 2 out if you don't intend on using CTests
 include(CTest)
 enable_testing()
+
+add_subdirectory(
+    tests
+)
 
 # Extra C++ specific option I need
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)

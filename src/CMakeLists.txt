@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.0.0)
+cmake_minimum_required(VERSION 3.13)
 
 file(GLOB_RECURSE SRC_CXX_FILES CONFIGURE_DEPENDS *.cpp)
 file(GLOB_RECURSE SRC_C_FILES CONFIGURE_DEPENDS *.c)
