@@ -14,14 +14,12 @@
 
 enum class ProgramSourceKind
 {
-    BuiltIn,
     Disk,
 };
 
 struct ProgramCatalogEntry
 {
-    ProgramSourceKind kind = ProgramSourceKind::BuiltIn;
-    ProgramId built_in_id = ProgramId::IdleLoop;
+    ProgramSourceKind kind = ProgramSourceKind::Disk;
     std::string display_name;
     std::string description;
     std::filesystem::path disk_path;
@@ -222,7 +220,6 @@ inline auto parse_program_file(const std::filesystem::path &path) -> std::option
         return std::nullopt;
 
     ProgramDefinition program;
-    program.id = ProgramId::IdleLoop;
     program.name = path.stem().string();
     program.description = std::string("Disk program: ") + program.name;
 
@@ -309,11 +306,6 @@ inline auto parse_program_file(const std::filesystem::path &path) -> std::option
     return program;
 }
 
-inline auto builtin_program_entries() -> std::vector<ProgramCatalogEntry>
-{
-    return {};
-}
-
 inline auto discover_program_entries(const std::filesystem::path &disk_directory) -> std::vector<ProgramCatalogEntry>
 {
     std::vector<ProgramCatalogEntry> entries;
@@ -340,7 +332,7 @@ inline auto discover_program_entries(const std::filesystem::path &disk_directory
         if (!parsed)
             continue;
 
-        entries.push_back({ProgramSourceKind::Disk, ProgramId::IdleLoop, parsed->name, parsed->description, file, parsed});
+        entries.push_back({ProgramSourceKind::Disk, parsed->name, parsed->description, file, parsed});
     }
 
     return entries;
@@ -351,20 +343,16 @@ inline auto load_program_entry(FIAT128::Emulator<cores, memory_modules, word_siz
 {
     ProgramDefinition definition;
 
-    if (entry.kind == ProgramSourceKind::Disk)
-    {
-        auto parsed = parse_program_file(entry.disk_path);
-        if (!parsed)
-            return false;
-        definition = *parsed;
-    }
-    else if (entry.cached_definition)
+    if (entry.cached_definition)
     {
         definition = *entry.cached_definition;
     }
     else
     {
-        definition = make_program(entry.built_in_id);
+        auto parsed = parse_program_file(entry.disk_path);
+        if (!parsed)
+            return false;
+        definition = *parsed;
     }
 
     load_program(emulator, definition);

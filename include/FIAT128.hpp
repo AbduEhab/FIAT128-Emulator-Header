@@ -4,6 +4,7 @@
 #include <array>
 #include <assert.h>
 #include <bitset>
+#include <cstdint>
 #include <chrono>
 #include <deque>
 #include <filesystem>
@@ -303,6 +304,8 @@ namespace FIAT128
             {
                 cpu.execute_instruction(step_mode);
             }
+
+            execute_gpu_shader();
         }
 
         /**
@@ -428,6 +431,11 @@ namespace FIAT128
             return snapshot;
         }
 
+        auto get_gpu_framebuffer() const -> const std::vector<uint32_t> &
+        {
+            return gpu_framebuffer;
+        }
+
         auto latest_memory_write_sequence() const -> size_t
         {
             return bus.latest_memory_write_sequence();
@@ -541,6 +549,348 @@ namespace FIAT128
         };
 
         struct CPU;
+
+    private:
+        enum class GpuOpcode : uint8_t
+        {
+            Load = 0,
+            Store = 1,
+            PixelStore = 2,
+            Add = 3,
+            Sub = 4,
+            Mul = 5,
+            Div = 6,
+            Mod = 7,
+            Neg = 8,
+            Abs = 9,
+            Dot = 10,
+            Cross = 11,
+            Length = 12,
+            Normalize = 13,
+            Lerp = 14,
+            Clamp = 15,
+            Eq = 16,
+            Ne = 17,
+            Lt = 18,
+            Le = 19,
+            Gt = 20,
+            Ge = 21,
+            And = 22,
+            Or = 23,
+            Xor = 24,
+            Not = 25,
+            Shl = 26,
+            Shr = 27,
+            Jmp = 28,
+            Jz = 29,
+            Jnz = 30,
+            Halt = 31,
+            ReadInvocationIdX = 32,
+            ReadInvocationIdY = 33,
+            ReadWidth = 34,
+            ReadHeight = 35,
+            PackRgb = 36,
+            PackRgba = 37,
+            UnpackRgb = 38,
+            UnpackRgba = 39,
+        };
+
+        struct GpuInstruction
+        {
+            GpuOpcode opcode = GpuOpcode::Halt;
+            uint8_t dst = 0;
+            uint8_t src1 = 0;
+            uint8_t src2 = 0;
+            uint32_t immediate = 0;
+        };
+
+        static constexpr size_t gpu_width = 400;
+        static constexpr size_t gpu_height = 600;
+        static constexpr size_t gpu_register_count = 16;
+        static constexpr size_t gpu_entry_point = 3;
+        static constexpr size_t gpu_step_limit = 2048;
+
+        static auto decode_gpu_instruction(const std::bitset<word_size> &word) -> GpuInstruction
+        {
+            const uint64_t raw = word.to_ullong();
+
+            return {
+                static_cast<GpuOpcode>(raw & 0xFFULL),
+                static_cast<uint8_t>((raw >> 8) & 0xFFULL),
+                static_cast<uint8_t>((raw >> 16) & 0xFFULL),
+                static_cast<uint8_t>((raw >> 24) & 0xFFULL),
+                static_cast<uint32_t>((raw >> 32) & 0xFFFFFFFFULL),
+            };
+        }
+
+        auto ensure_gpu_framebuffer() -> void
+        {
+            const size_t required_size = gpu_width * gpu_height;
+            if (gpu_framebuffer.size() != required_size)
+                gpu_framebuffer.assign(required_size, 0xFF000000U);
+        }
+
+        auto write_gpu_pixel(size_t x, size_t y, uint32_t color) -> void
+        {
+            if (x >= gpu_width || y >= gpu_height)
+                return;
+
+            ensure_gpu_framebuffer();
+            gpu_framebuffer[y * gpu_width + x] = 0xFF000000U | (color & 0x00FFFFFFU);
+        }
+
+        static auto clamp_register_index(uint8_t index) -> size_t
+        {
+            return index % gpu_register_count;
+        }
+
+        static auto low_32(std::uint64_t value) -> uint32_t
+        {
+            return static_cast<uint32_t>(value & 0xFFFFFFFFULL);
+        }
+
+        static auto pack_rgb_from_scalars(int64_t red, int64_t green, int64_t blue) -> uint32_t
+        {
+            return (static_cast<uint32_t>(red) & 0xFFU) << 16U |
+                   (static_cast<uint32_t>(green) & 0xFFU) << 8U |
+                   (static_cast<uint32_t>(blue) & 0xFFU);
+        }
+
+        auto execute_gpu_invocation(size_t invocation_x, size_t invocation_y) -> void
+        {
+            std::array<int64_t, gpu_register_count> registers{};
+            registers[12] = static_cast<int64_t>(invocation_x);
+            registers[13] = static_cast<int64_t>(invocation_y);
+            registers[14] = static_cast<int64_t>(gpu_width);
+            registers[15] = static_cast<int64_t>(gpu_height);
+
+            size_t pc = gpu_entry_point;
+
+            for (size_t step = 0; step < gpu_step_limit && pc < memory[3].memory.size(); ++step)
+            {
+                const auto instruction_word = bus.read(true, 0, 3, pc);
+                ++pc;
+
+                const auto instruction = decode_gpu_instruction(instruction_word);
+                const size_t dst = clamp_register_index(instruction.dst);
+                const size_t src1 = clamp_register_index(instruction.src1);
+                const size_t src2 = clamp_register_index(instruction.src2);
+
+                auto &dst_reg = registers[dst];
+                const auto &src1_reg = registers[src1];
+                const auto &src2_reg = registers[src2];
+
+                switch (instruction.opcode)
+                {
+                case GpuOpcode::Load:
+                {
+                    const auto loaded = bus.read(true, 0, 3, static_cast<size_t>(instruction.immediate));
+                    dst_reg = static_cast<int64_t>(low_32(loaded.to_ullong()));
+                    break;
+                }
+                case GpuOpcode::Store:
+                    set_word_in_memory(3, static_cast<size_t>(instruction.immediate), std::bitset<word_size>(static_cast<uint64_t>(dst_reg)));
+                    break;
+                case GpuOpcode::PixelStore:
+                    write_gpu_pixel(invocation_x, invocation_y, static_cast<uint32_t>(dst_reg));
+                    break;
+                case GpuOpcode::Add:
+                    dst_reg = src1_reg + src2_reg;
+                    break;
+                case GpuOpcode::Sub:
+                    dst_reg = src1_reg - src2_reg;
+                    break;
+                case GpuOpcode::Mul:
+                    dst_reg = src1_reg * src2_reg;
+                    break;
+                case GpuOpcode::Div:
+                    dst_reg = (src2_reg == 0) ? 0 : (src1_reg / src2_reg);
+                    break;
+                case GpuOpcode::Mod:
+                    dst_reg = (src2_reg == 0) ? 0 : (src1_reg % src2_reg);
+                    break;
+                case GpuOpcode::Neg:
+                    dst_reg = -src1_reg;
+                    break;
+                case GpuOpcode::Abs:
+                    dst_reg = std::llabs(src1_reg);
+                    break;
+                case GpuOpcode::Dot:
+                    dst_reg = registers[clamp_register_index(static_cast<uint8_t>(src1 + 0))] * registers[clamp_register_index(static_cast<uint8_t>(src2 + 0))] +
+                              registers[clamp_register_index(static_cast<uint8_t>(src1 + 1))] * registers[clamp_register_index(static_cast<uint8_t>(src2 + 1))] +
+                              registers[clamp_register_index(static_cast<uint8_t>(src1 + 2))] * registers[clamp_register_index(static_cast<uint8_t>(src2 + 2))];
+                    break;
+                case GpuOpcode::Cross:
+                {
+                    const auto ax = registers[clamp_register_index(static_cast<uint8_t>(src1 + 0))];
+                    const auto ay = registers[clamp_register_index(static_cast<uint8_t>(src1 + 1))];
+                    const auto az = registers[clamp_register_index(static_cast<uint8_t>(src1 + 2))];
+                    const auto bx = registers[clamp_register_index(static_cast<uint8_t>(src2 + 0))];
+                    const auto by = registers[clamp_register_index(static_cast<uint8_t>(src2 + 1))];
+                    const auto bz = registers[clamp_register_index(static_cast<uint8_t>(src2 + 2))];
+
+                    registers[clamp_register_index(instruction.dst + 0)] = ay * bz - az * by;
+                    registers[clamp_register_index(instruction.dst + 1)] = az * bx - ax * bz;
+                    registers[clamp_register_index(instruction.dst + 2)] = ax * by - ay * bx;
+                    break;
+                }
+                case GpuOpcode::Length:
+                {
+                    const long double x = static_cast<long double>(registers[clamp_register_index(static_cast<uint8_t>(src1 + 0))]);
+                    const long double y = static_cast<long double>(registers[clamp_register_index(static_cast<uint8_t>(src1 + 1))]);
+                    const long double z = static_cast<long double>(registers[clamp_register_index(static_cast<uint8_t>(src1 + 2))]);
+                    dst_reg = static_cast<int64_t>(std::sqrt((x * x) + (y * y) + (z * z)));
+                    break;
+                }
+                case GpuOpcode::Normalize:
+                {
+                    const long double x = static_cast<long double>(registers[clamp_register_index(static_cast<uint8_t>(src1 + 0))]);
+                    const long double y = static_cast<long double>(registers[clamp_register_index(static_cast<uint8_t>(src1 + 1))]);
+                    const long double z = static_cast<long double>(registers[clamp_register_index(static_cast<uint8_t>(src1 + 2))]);
+                    const long double length = std::sqrt((x * x) + (y * y) + (z * z));
+                    const long double scale = (length == 0.0L) ? 0.0L : (1.0L / length);
+
+                    registers[clamp_register_index(instruction.dst + 0)] = static_cast<int64_t>(std::llround(x * scale * 1000000.0L));
+                    registers[clamp_register_index(instruction.dst + 1)] = static_cast<int64_t>(std::llround(y * scale * 1000000.0L));
+                    registers[clamp_register_index(instruction.dst + 2)] = static_cast<int64_t>(std::llround(z * scale * 1000000.0L));
+                    break;
+                }
+                case GpuOpcode::Lerp:
+                {
+                    const int64_t factor = static_cast<int64_t>(instruction.immediate & 0xFFFFU);
+                    dst_reg = src1_reg + (((src2_reg - src1_reg) * factor) / 65535);
+                    break;
+                }
+                case GpuOpcode::Clamp:
+                {
+                    const int64_t minimum = src2_reg;
+                    const int64_t maximum = static_cast<int64_t>(instruction.immediate);
+                    dst_reg = std::clamp(src1_reg, minimum, maximum);
+                    break;
+                }
+                case GpuOpcode::Eq:
+                    dst_reg = (src1_reg == src2_reg) ? 1 : 0;
+                    break;
+                case GpuOpcode::Ne:
+                    dst_reg = (src1_reg != src2_reg) ? 1 : 0;
+                    break;
+                case GpuOpcode::Lt:
+                    dst_reg = (src1_reg < src2_reg) ? 1 : 0;
+                    break;
+                case GpuOpcode::Le:
+                    dst_reg = (src1_reg <= src2_reg) ? 1 : 0;
+                    break;
+                case GpuOpcode::Gt:
+                    dst_reg = (src1_reg > src2_reg) ? 1 : 0;
+                    break;
+                case GpuOpcode::Ge:
+                    dst_reg = (src1_reg >= src2_reg) ? 1 : 0;
+                    break;
+                case GpuOpcode::And:
+                    dst_reg = src1_reg & src2_reg;
+                    break;
+                case GpuOpcode::Or:
+                    dst_reg = src1_reg | src2_reg;
+                    break;
+                case GpuOpcode::Xor:
+                    dst_reg = src1_reg ^ src2_reg;
+                    break;
+                case GpuOpcode::Not:
+                    dst_reg = ~src1_reg;
+                    break;
+                case GpuOpcode::Shl:
+                    dst_reg = src1_reg << static_cast<int>(instruction.immediate & 0x3FU);
+                    break;
+                case GpuOpcode::Shr:
+                    dst_reg = static_cast<int64_t>(static_cast<uint64_t>(src1_reg) >> static_cast<int>(instruction.immediate & 0x3FU));
+                    break;
+                case GpuOpcode::Jmp:
+                    pc = static_cast<size_t>(instruction.immediate);
+                    break;
+                case GpuOpcode::Jz:
+                    if (dst_reg == 0)
+                        pc = static_cast<size_t>(instruction.immediate);
+                    break;
+                case GpuOpcode::Jnz:
+                    if (dst_reg != 0)
+                        pc = static_cast<size_t>(instruction.immediate);
+                    break;
+                case GpuOpcode::ReadInvocationIdX:
+                    dst_reg = static_cast<int64_t>(invocation_x);
+                    break;
+                case GpuOpcode::ReadInvocationIdY:
+                    dst_reg = static_cast<int64_t>(invocation_y);
+                    break;
+                case GpuOpcode::ReadWidth:
+                    dst_reg = static_cast<int64_t>(gpu_width);
+                    break;
+                case GpuOpcode::ReadHeight:
+                    dst_reg = static_cast<int64_t>(gpu_height);
+                    break;
+                case GpuOpcode::PackRgb:
+                    dst_reg = static_cast<int64_t>(pack_rgb_from_scalars(src1_reg, src2_reg, instruction.immediate));
+                    break;
+                case GpuOpcode::PackRgba:
+                    dst_reg = static_cast<int64_t>(((static_cast<uint32_t>(src1_reg) & 0xFFU) << 24U) |
+                                                   ((static_cast<uint32_t>(src2_reg) & 0xFFU) << 16U) |
+                                                   ((instruction.immediate & 0xFFFFU) << 0U));
+                    break;
+                case GpuOpcode::UnpackRgb:
+                    dst_reg = static_cast<int64_t>(static_cast<uint32_t>(src1_reg) & 0x00FFFFFFU);
+                    break;
+                case GpuOpcode::UnpackRgba:
+                    dst_reg = static_cast<int64_t>(static_cast<uint32_t>(src1_reg));
+                    break;
+                case GpuOpcode::Halt:
+                    return;
+                default:
+                    return;
+                }
+            }
+
+        }
+
+        auto execute_gpu_shader() -> void
+        {
+            if constexpr (memory_modules <= 3)
+                return;
+
+            ensure_gpu_framebuffer();
+
+            const auto control_word = bus.read(true, 0, 3, 0);
+            const uint8_t start_byte = static_cast<uint8_t>(control_word.to_ullong() & 0xFFU);
+            if (start_byte != 0xFFU)
+                return;
+
+            const unsigned int requested_threads = std::max(1U, std::min<unsigned int>(std::thread::hardware_concurrency(), static_cast<unsigned int>(gpu_height)));
+            const size_t rows_per_thread = (gpu_height + static_cast<size_t>(requested_threads) - 1) / static_cast<size_t>(requested_threads);
+            std::vector<std::thread> workers;
+            workers.reserve(requested_threads);
+
+            for (unsigned int thread_index = 0; thread_index < requested_threads; ++thread_index)
+            {
+                const size_t start_row = static_cast<size_t>(thread_index) * rows_per_thread;
+                const size_t end_row = std::min(gpu_height, start_row + rows_per_thread);
+                if (start_row >= end_row)
+                    break;
+
+                workers.emplace_back([&, start_row, end_row]()
+                {
+                    for (size_t y = start_row; y < end_row; ++y)
+                    {
+                        for (size_t x = 0; x < gpu_width; ++x)
+                            execute_gpu_invocation(x, y);
+                    }
+                });
+            }
+
+            for (auto &worker : workers)
+                worker.join();
+
+            set_word_in_memory(3, 0, std::bitset<word_size>(0));
+        }
+
+        std::vector<uint32_t> gpu_framebuffer;
 
         struct BUS
         {

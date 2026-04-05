@@ -1,0 +1,77 @@
+NAME GPU UV Grid Demo
+DESCRIPTION Uploads a GPU shader that normalizes X/Y to UV (0..1) and maps them to R/G.
+
+# ---------------------------------------------------------------------------
+# ROM-side constants copied by CPU into GPU RAM module (M3)
+# ---------------------------------------------------------------------------
+# RAM3[0] control byte. 0xFF starts the GPU pass.
+WORD 0 0xFF
+
+# RAM3[1] scale factor used for UV -> color conversion (255)
+WORD 1 0xFF
+
+# Shader bytecode starts at RAM3[3].
+# 3: read_invocation_id_x -> R0
+WORD 3 0x0000000000000020
+# 4: read_invocation_id_y -> R1
+WORD 4 0x0000000000000121
+# 5: read_width -> R2
+WORD 5 0x0000000000000222
+# 6: read_height -> R3
+WORD 6 0x0000000000000323
+# 7: load RAM3[1] (255) -> R4
+WORD 7 0x0000000100000400
+# 8: mul R5 = R0 * R4
+WORD 8 0x0000000004000505
+# 9: div R6 = R5 / R2   (u normalized to 0..255)
+WORD 9 0x0000000002050606
+# 10: mul R7 = R1 * R4
+WORD 10 0x0000000004010705
+# 11: div R8 = R7 / R3  (v normalized to 0..255)
+WORD 11 0x0000000003070806
+# 12: pack_rgb R9, R6, R8, blue=0x80
+WORD 12 0x0000008008060924
+# 13: pixel_store R9
+WORD 13 0x0000000000000902
+# 14: halt
+WORD 14 0x000000000000001F
+
+# ---------------------------------------------------------------------------
+# CPU program: copy shader from ROM (M0) to GPU RAM (M3), then trigger start
+# ---------------------------------------------------------------------------
+# Copy scale constant RAM3[1]
+INSTR 80 LDA R0 M0 1
+INSTR 79 STA R0 M3 1
+
+# Copy shader RAM3[3..14]
+INSTR 78 LDA R0 M0 3
+INSTR 77 STA R0 M3 3
+INSTR 76 LDA R0 M0 4
+INSTR 75 STA R0 M3 4
+INSTR 74 LDA R0 M0 5
+INSTR 73 STA R0 M3 5
+INSTR 72 LDA R0 M0 6
+INSTR 71 STA R0 M3 6
+INSTR 70 LDA R0 M0 7
+INSTR 69 STA R0 M3 7
+INSTR 68 LDA R0 M0 8
+INSTR 67 STA R0 M3 8
+INSTR 66 LDA R0 M0 9
+INSTR 65 STA R0 M3 9
+INSTR 64 LDA R0 M0 10
+INSTR 63 STA R0 M3 10
+INSTR 62 LDA R0 M0 11
+INSTR 61 STA R0 M3 11
+INSTR 60 LDA R0 M0 12
+INSTR 59 STA R0 M3 12
+INSTR 58 LDA R0 M0 13
+INSTR 57 STA R0 M3 13
+INSTR 56 LDA R0 M0 14
+INSTR 55 STA R0 M3 14
+
+# Write control byte last so GPU runs after upload completes.
+INSTR 54 LDA R0 M0 0
+INSTR 53 STA R0 M3 0
+
+# CPU setup program finished.
+INSTR 52 HLT R0 R0 R0

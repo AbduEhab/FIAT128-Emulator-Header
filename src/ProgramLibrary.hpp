@@ -2,17 +2,10 @@
 
 #include <FIAT128.hpp>
 
-#include <array>
 #include <bitset>
+#include <cstdint>
 #include <string>
 #include <vector>
-
-enum class ProgramId
-{
-    IdleLoop = 0,
-    HaltDemo = 1,
-    BranchNegativeDemo = 2,
-};
 
 struct ProgramWord
 {
@@ -34,84 +27,13 @@ struct ProgramInstruction
 
 struct ProgramDefinition
 {
-    ProgramId id = ProgramId::IdleLoop;
     std::string name;
     std::string description;
     std::vector<ProgramWord> words;
     std::vector<ProgramInstruction> instructions;
+    bool mirror_words_to_ram1 = false;
+    bool mirror_words_to_ram3 = false;
 };
-
-inline auto program_name(ProgramId id) -> std::string
-{
-    switch (id)
-    {
-    case ProgramId::IdleLoop:
-        return "Idle Loop";
-    case ProgramId::HaltDemo:
-        return "Halt Demo";
-    case ProgramId::BranchNegativeDemo:
-        return "Branch Negative Demo";
-    }
-
-    return "Unknown";
-}
-
-inline auto make_program(ProgramId id) -> ProgramDefinition
-{
-    switch (id)
-    {
-    case ProgramId::IdleLoop:
-        return {
-            ProgramId::IdleLoop,
-            "Idle Loop",
-            "Simple MOV/BUN loop for stepping and renderer testing.",
-            {
-                {0, std::bitset<128>(0)},
-                {1, std::bitset<128>(1)},
-            },
-            {
-                {7, FIAT128::InstructionType::MOV, FIAT128::RegisterIndex::R0, FIAT128::RegisterIndex::R0, FIAT128::RegisterIndex::R0},
-                {6, FIAT128::InstructionType::BUN, FIAT128::RegisterIndex::R0, FIAT128::RegisterIndex::R0, FIAT128::RegisterIndex::R0},
-            }
-        };
-
-    case ProgramId::HaltDemo:
-        return {
-            ProgramId::HaltDemo,
-            "Halt Demo",
-            "Runs two instructions then halts.",
-            {
-                {0, std::bitset<128>(0)},
-                {1, std::bitset<128>(1)},
-                {2, std::bitset<128>(2)},
-            },
-            {
-                {7, FIAT128::InstructionType::MOV, FIAT128::RegisterIndex::R0, FIAT128::RegisterIndex::R0, FIAT128::RegisterIndex::R0},
-                {6, FIAT128::InstructionType::ADD, FIAT128::RegisterIndex::R0, FIAT128::RegisterIndex::R0, FIAT128::RegisterIndex::R0},
-                {5, FIAT128::InstructionType::HLT, FIAT128::RegisterIndex::R0, FIAT128::RegisterIndex::R0, FIAT128::RegisterIndex::R0},
-            }
-        };
-
-    case ProgramId::BranchNegativeDemo:
-        return {
-            ProgramId::BranchNegativeDemo,
-            "Branch Negative Demo",
-            "Exercises BIN/BUN control flow for renderer visualization.",
-            {
-                {0, std::bitset<128>(0)},
-                {1, std::bitset<128>(3)},
-                {2, std::bitset<128>(7)},
-            },
-            {
-                {7, FIAT128::InstructionType::BNZ, FIAT128::RegisterIndex::R0, FIAT128::RegisterIndex::R0, FIAT128::RegisterIndex::R0},
-                {6, FIAT128::InstructionType::BUN, FIAT128::RegisterIndex::R0, FIAT128::RegisterIndex::R0, FIAT128::RegisterIndex::R0},
-                {5, FIAT128::InstructionType::MOV, FIAT128::RegisterIndex::R0, FIAT128::RegisterIndex::R0, FIAT128::RegisterIndex::R0},
-            }
-        };
-    }
-
-    return {};
-}
 
 template <size_t cores, size_t memory_modules, size_t word_size>
 inline auto load_program(FIAT128::Emulator<cores, memory_modules, word_size> &emulator, const ProgramDefinition &program, size_t channel = 0) -> void
@@ -140,6 +62,12 @@ inline auto load_program(FIAT128::Emulator<cores, memory_modules, word_size> &em
     for (const auto &word : program.words)
     {
         emulator.set_word_in_memory(0, word.index, std::bitset<word_size>(word.value.to_string()));
+
+        if (program.mirror_words_to_ram1 && memory_modules > 1)
+            emulator.set_word_in_memory(1, word.index, std::bitset<word_size>(word.value.to_string()));
+
+        if (program.mirror_words_to_ram3 && memory_modules > 3)
+            emulator.set_word_in_memory(3, word.index, std::bitset<word_size>(word.value.to_string()));
 
         if constexpr (use_master_slave_boot)
         {
@@ -247,3 +175,4 @@ inline auto load_program(FIAT128::Emulator<cores, memory_modules, word_size> &em
         emulator.set_cpu_entry_point(0, entry_point);
     }
 }
+

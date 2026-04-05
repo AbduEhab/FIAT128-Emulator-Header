@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cstdlib>
 #include <cctype>
 #include <cstdint>
 #include <deque>
@@ -14,6 +15,7 @@
 #include <stdexcept>
 #include <iomanip>
 #include <string>
+#include <thread>
 #include <unordered_map>
 #include <vector>
 
@@ -74,6 +76,8 @@ public:
 
     ~GuiRenderer()
     {
+        if (gpu_texture)
+            SDL_DestroyTexture(gpu_texture);
         if (renderer)
             SDL_DestroyRenderer(renderer);
         if (window)
@@ -115,29 +119,6 @@ public:
         clamp_inspector_scroll();
     }
 
-    auto selected_program_entry() const -> std::optional<ProgramCatalogEntry>
-    {
-        if (selected_program_index >= program_entries.size())
-            return std::nullopt;
-
-        return program_entries[selected_program_index];
-    }
-
-    auto selected_program_definition() const -> std::optional<ProgramDefinition>
-    {
-        const auto entry = selected_program_entry();
-        if (!entry)
-            return std::nullopt;
-
-        if (entry->cached_definition)
-            return entry->cached_definition;
-
-        if (entry->kind == ProgramSourceKind::BuiltIn)
-            return make_program(entry->built_in_id);
-
-        return parse_program_file(entry->disk_path);
-    }
-
     auto selected_program_index_value() const -> size_t
     {
         return selected_program_index;
@@ -174,6 +155,53 @@ public:
         run_continuous = false;
     }
 
+    auto console_append_text(const std::string &text) -> void
+    {
+        if (text.empty())
+            return;
+
+        // Split text by newlines and add to console buffer
+        std::istringstream iss(text);
+        std::string line;
+        while (std::getline(iss, line))
+        {
+            console_lines.push_back(line);
+            // Keep console buffer manageable (max 1000 lines)
+            if (console_lines.size() > 1000)
+                console_lines.pop_front();
+        }
+    }
+
+    auto console_clear() -> void
+    {
+        console_lines.clear();
+    }
+
+    auto console_get_lines() const -> const std::deque<std::string> &
+    {
+        return console_lines;
+    }
+
+    auto selected_program_entry() const -> std::optional<ProgramCatalogEntry>
+    {
+        if (selected_program_index >= program_entries.size())
+            return std::nullopt;
+
+        return program_entries[selected_program_index];
+    }
+
+    auto selected_program_definition() const -> std::optional<ProgramDefinition>
+    {
+        const auto entry = selected_program_entry();
+        if (!entry)
+            return std::nullopt;
+
+        if (entry->cached_definition)
+            return entry->cached_definition;
+
+        return parse_program_file(entry->disk_path);
+    }
+
     template <typename EmulatorT>
     auto draw_frame(EmulatorT &emulator) -> void
     {
@@ -203,40 +231,11 @@ public:
         active_module_count = std::max<size_t>(1, snapshot.size());
 
         if (!snapshot.empty())
-            selected_visual_module = std::min(selected_visual_module, snapshot.size() - 1);
-        if (!snapshot.empty())
             selected_memory_module = std::min(selected_memory_module, snapshot.size() - 1);
 
         std::vector<std::string> video_lines;
-        if (!snapshot.empty())
-        {
-            const auto &active_module = snapshot[selected_visual_module];
-            size_t non_zero = 0;
-            for (const auto &word : active_module)
-            {
-                if (word.any())
-                    ++non_zero;
-            }
-
-            std::ostringstream l0;
-            l0 << "VIEWING M" << selected_visual_module << " - " << module_name(selected_visual_module);
-            video_lines.push_back(l0.str());
-
-            std::ostringstream l1;
-            l1 << "WORDS: " << active_module.size() << "  NONZERO: " << non_zero;
-            video_lines.push_back(l1.str());
-
-            if (selected_visual_module == 2 && !active_module.empty())
-            {
-                std::ostringstream l2;
-                l2 << "CONSOLE VALUE[0]: " << bitset_to_i128_string(active_module[0]);
-                video_lines.push_back(l2.str());
-            }
-        }
-        else
-        {
-            video_lines.push_back("NO MODULE DATA");
-        }
+        video_lines.push_back("GPU SCREEN");
+        video_lines.push_back("ROM AND RAM ARE INSPECTED IN THE MEMORY PANEL");
 
         SDL_GetWindowSize(window, &window_width, &window_height);
 
@@ -258,9 +257,12 @@ public:
         memory_panel_rect = memory_rect;
 
         draw_instruction_panel(instructions_rect, cpu_states);
-        draw_program_selector_panel(menu_rect);
+        if (console_visible)
+            draw_console_panel(menu_rect);
+        else
+            draw_program_selector_panel(menu_rect);
         draw_memory_panel(memory_rect, mem_lines);
-        draw_video_panel(video_rect, snapshot, video_lines);
+        draw_video_panel(video_rect, video_lines, emulator);
 
         SDL_RenderPresent(renderer);
         ++frame_counter;
@@ -456,6 +458,8 @@ private:
                     break;
                 case SDLK_SPACE:
                     run_continuous = !run_continuous;
+                    if (run_continuous)
+                        console_visible = true;
                     break;
                 case SDLK_n:
                     ++pending_step_requests;
@@ -482,7 +486,10 @@ private:
         draw_panel_background(rect);
         draw_text(rect.x + 12, rect.y + 10, "PROGRAM SELECTOR", 2, {242, 246, 255, 255});
 
-        button_inspector_toggle = {rect.x + rect.w - 170, rect.y + 8, 158, 22};
+        button_console_toggle = {rect.x + rect.w - 130, rect.y + 8, 118, 22};
+        draw_button(button_console_toggle, "SHOW CONSOLE", {150, 220, 200, 255});
+
+        button_inspector_toggle = {rect.x + rect.w - 130 - 160, rect.y + 8, 158, 22};
         draw_button(button_inspector_toggle, inspector_visible ? "HIDE INSPECTOR" : "SHOW INSPECTOR", {255, 200, 140, 255});
 
         const SDL_Rect header_rect{rect.x + 10, rect.y + 36, rect.w - 20, 30};
@@ -500,6 +507,61 @@ private:
         draw_text(footer_rect.x, footer_rect.y, clamp_text_to_width(selected_program_footer(), footer_rect.w, 1), 1, {190, 212, 240, 255});
 
         SDL_SetRenderDrawColor(renderer, 120, 132, 160, 255);
+        SDL_RenderDrawRect(renderer, &rect);
+    }
+
+    auto draw_console_panel(const SDL_Rect &rect) -> void
+    {
+        SDL_SetRenderDrawColor(renderer, 10, 10, 10, 255);
+        SDL_RenderFillRect(renderer, &rect);
+        draw_text(rect.x + 12, rect.y + 10, "CONSOLE", 2, {120, 255, 120, 255});
+
+        button_console_toggle = {rect.x + rect.w - 130, rect.y + 8, 118, 22};
+        draw_button(button_console_toggle, "SHOW LOADER", {90, 190, 120, 255});
+
+        const SDL_Rect content_rect{rect.x + 10, rect.y + 36, rect.w - 20, rect.h - 48};
+
+        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+        SDL_RenderFillRect(renderer, &content_rect);
+
+        const int char_width = 6;
+        const int char_height = 9;
+        const int max_cols = content_rect.w / char_width;
+        const int max_rows = content_rect.h / char_height;
+        const int text_start_row = 1;
+        const int visible_text_rows = std::max(0, max_rows - text_start_row);
+
+        SDL_SetRenderDrawColor(renderer, 22, 22, 22, 255);
+        for (int x = content_rect.x; x <= content_rect.x + content_rect.w; x += char_width)
+            SDL_RenderDrawLine(renderer, x, content_rect.y, x, content_rect.y + content_rect.h);
+
+        for (int y = content_rect.y; y <= content_rect.y + content_rect.h; y += char_height)
+            SDL_RenderDrawLine(renderer, content_rect.x, y, content_rect.x + content_rect.w, y);
+
+        const size_t total_lines = console_lines.size();
+        const size_t start_line = total_lines > static_cast<size_t>(visible_text_rows)
+                                      ? total_lines - static_cast<size_t>(visible_text_rows)
+                                      : 0;
+
+        int row = 0;
+        for (size_t i = start_line; i < total_lines && row < visible_text_rows; ++i, ++row)
+        {
+            const std::string &line = console_lines[i];
+            const int y_pos = content_rect.y + ((row + text_start_row) * char_height);
+
+            // Clamp line length to fit in panel
+            const std::string display_line = line.substr(0, std::min(line.length(), static_cast<size_t>(std::max(0, max_cols - 1))));
+
+            draw_text(content_rect.x + 2, y_pos, std::string(" ") + display_line, 1, {120, 255, 120, 255});
+        }
+
+        if (console_lines.empty() && ((frame_counter / 30) % 2 == 0))
+            draw_text(content_rect.x + 2, content_rect.y + (text_start_row * char_height), " >", 1, {120, 255, 120, 255});
+
+        SDL_SetRenderDrawColor(renderer, 70, 180, 90, 255);
+        SDL_RenderDrawRect(renderer, &content_rect);
+
+        SDL_SetRenderDrawColor(renderer, 70, 180, 90, 255);
         SDL_RenderDrawRect(renderer, &rect);
     }
 
@@ -753,6 +815,12 @@ private:
 
     auto handle_mouse_click(int mouse_x, int mouse_y) -> void
     {
+        if (point_in_rect(mouse_x, mouse_y, button_console_toggle))
+        {
+            console_visible = !console_visible;
+            return;
+        }
+
         if (point_in_rect(mouse_x, mouse_y, button_step))
         {
             ++pending_step_requests;
@@ -768,6 +836,8 @@ private:
         if (point_in_rect(mouse_x, mouse_y, button_run_pause))
         {
             run_continuous = !run_continuous;
+            if (run_continuous)
+                console_visible = true;
             return;
         }
 
@@ -841,23 +911,6 @@ private:
             const size_t module_count = std::max<size_t>(1, active_module_count);
             selected_memory_module = (selected_memory_module + 1) % module_count;
             memory_hex_scroll_offset = 0;
-            return;
-        }
-
-        if (point_in_rect(mouse_x, mouse_y, button_video_module_prev))
-        {
-            const size_t module_count = std::max<size_t>(1, active_module_count);
-            if (selected_visual_module == 0)
-                selected_visual_module = module_count - 1;
-            else
-                --selected_visual_module;
-            return;
-        }
-
-        if (point_in_rect(mouse_x, mouse_y, button_video_module_next))
-        {
-            const size_t module_count = std::max<size_t>(1, active_module_count);
-            selected_visual_module = (selected_visual_module + 1) % module_count;
             return;
         }
 
@@ -1226,6 +1279,146 @@ private:
         return ".";
     }
 
+    template <size_t word_size>
+    static auto low_byte(const std::bitset<word_size> &value) -> uint8_t
+    {
+        uint8_t result = 0;
+        for (size_t bit = 0; bit < 8 && bit < word_size; ++bit)
+        {
+            if (value.test(bit))
+                result |= static_cast<uint8_t>(1U << bit);
+        }
+
+        return result;
+    }
+
+    template <size_t word_size>
+    static auto color_from_word(const std::bitset<word_size> &value) -> SDL_Color
+    {
+        const uint32_t raw = static_cast<uint32_t>(value.to_ullong() & 0x00FFFFFFULL);
+        return SDL_Color{
+            static_cast<Uint8>((raw >> 16) & 0xFFU),
+            static_cast<Uint8>((raw >> 8) & 0xFFU),
+            static_cast<Uint8>(raw & 0xFFU),
+            255};
+    }
+
+    static auto normalize_coord(uint8_t value, int origin, int size) -> int
+    {
+        return origin + ((static_cast<int>(value) * size) / 255);
+    }
+
+    static constexpr int gpu_logical_width = 400;
+    static constexpr int gpu_logical_height = 600;
+
+    struct GpuPrimitiveCommand
+    {
+        uint8_t opcode = 0;
+        uint8_t x1 = 0;
+        uint8_t y1 = 0;
+        uint8_t x2 = 0;
+        uint8_t y2 = 0;
+        SDL_Color color{0, 0, 0, 255};
+    };
+
+    template <size_t word_size>
+    static auto decode_gpu_commands(const std::vector<std::bitset<word_size>> &gpu_words) -> std::vector<GpuPrimitiveCommand>
+    {
+        std::vector<GpuPrimitiveCommand> commands;
+        if (gpu_words.empty())
+            return commands;
+
+        const size_t command_count = std::min<size_t>(low_byte(gpu_words[0]), (gpu_words.size() > 1 ? (gpu_words.size() - 1) / 6 : 0));
+        commands.reserve(command_count);
+
+        for (size_t command_index = 0; command_index < command_count; ++command_index)
+        {
+            const size_t base = 1 + (command_index * 6);
+            if (base + 5 >= gpu_words.size())
+                break;
+
+            GpuPrimitiveCommand command;
+            command.opcode = low_byte(gpu_words[base]);
+            command.x1 = low_byte(gpu_words[base + 1]);
+            command.y1 = low_byte(gpu_words[base + 2]);
+            command.x2 = low_byte(gpu_words[base + 3]);
+            command.y2 = low_byte(gpu_words[base + 4]);
+            command.color = color_from_word(gpu_words[base + 5]);
+            commands.push_back(command);
+        }
+
+        return commands;
+    }
+
+    static auto pixel_near_line(int px, int py, int x1, int y1, int x2, int y2) -> bool
+    {
+        const int dx = x2 - x1;
+        const int dy = y2 - y1;
+        const int len2 = (dx * dx) + (dy * dy);
+
+        if (len2 == 0)
+            return (std::abs(px - x1) <= 1) && (std::abs(py - y1) <= 1);
+
+        const int cross = std::abs(((px - x1) * dy) - ((py - y1) * dx));
+        return (cross * cross) <= (len2 * 2);
+    }
+
+    static auto shade_gpu_pixel(int px, int py, int grid_x, int grid_y, int grid_w, int grid_h, const std::vector<GpuPrimitiveCommand> &commands) -> Uint32
+    {
+        const int x = grid_x + ((px * grid_w) / 400);
+        const int y = grid_y + ((py * grid_h) / 600);
+
+        Uint32 argb = 0xFF000000U;
+
+        for (const auto &command : commands)
+        {
+            const int x1 = normalize_coord(command.x1, grid_x, grid_w);
+            const int y1 = normalize_coord(command.y1, grid_y, grid_h);
+            const int x2 = normalize_coord(command.x2, grid_x, grid_w);
+            const int y2 = normalize_coord(command.y2, grid_y, grid_h);
+
+            switch (command.opcode)
+            {
+            case 0:
+                argb = 0xFF000000U;
+                break;
+            case 1:
+                if ((std::abs(x - x1) <= 1) && (std::abs(y - y1) <= 1))
+                    argb = (0xFF000000U | (static_cast<Uint32>(command.color.r) << 16U) | (static_cast<Uint32>(command.color.g) << 8U) | static_cast<Uint32>(command.color.b));
+                break;
+            case 2:
+                if (pixel_near_line(x, y, x1, y1, x2, y2))
+                    argb = (0xFF000000U | (static_cast<Uint32>(command.color.r) << 16U) | (static_cast<Uint32>(command.color.g) << 8U) | static_cast<Uint32>(command.color.b));
+                break;
+            case 3:
+            {
+                const int left = std::min(x1, x2);
+                const int right = std::max(x1, x2);
+                const int top = std::min(y1, y2);
+                const int bottom = std::max(y1, y2);
+                const bool on_border = (x >= left && x <= right && y >= top && y <= bottom) && (x == left || x == right || y == top || y == bottom);
+                if (on_border)
+                    argb = (0xFF000000U | (static_cast<Uint32>(command.color.r) << 16U) | (static_cast<Uint32>(command.color.g) << 8U) | static_cast<Uint32>(command.color.b));
+                break;
+            }
+            case 4:
+            {
+                const int left = std::min(x1, x2);
+                const int right = std::max(x1, x2);
+                const int top = std::min(y1, y2);
+                const int bottom = std::max(y1, y2);
+                if (x >= left && x <= right && y >= top && y <= bottom)
+                    argb = (0xFF000000U | (static_cast<Uint32>(command.color.r) << 16U) | (static_cast<Uint32>(command.color.g) << 8U) | static_cast<Uint32>(command.color.b));
+                break;
+            }
+            default:
+                break;
+            }
+        }
+
+        return argb;
+    }
+
     auto selected_program_footer() const -> std::string
     {
         if (selected_program_index >= program_entries.size())
@@ -1238,8 +1431,8 @@ private:
         return std::string("SELECTED: ") + entry.display_name;
     }
 
-    template <size_t module_count>
-    auto draw_video_panel(const SDL_Rect &rect, const std::array<std::vector<std::bitset<128>>, module_count> &snapshot, const std::vector<std::string> &overlay_lines) -> void
+    template <typename EmulatorT>
+    auto draw_video_panel(const SDL_Rect &rect, const std::vector<std::string> &overlay_lines, EmulatorT &emulator) -> void
     {
         draw_panel_background(rect);
 
@@ -1247,143 +1440,26 @@ private:
         const int grid_x = rect.x + grid_padding;
         const int grid_y = rect.y + 36;
         const int grid_w = rect.w - (grid_padding * 2);
-        const int grid_h = rect.h - 90;
-
-        button_video_module_prev = {rect.x + rect.w - 120, rect.y + 8, 24, 20};
-        button_video_module_next = {rect.x + rect.w - 30, rect.y + 8, 24, 20};
-        draw_button(button_video_module_prev, "<", {220, 220, 220, 255});
-        draw_button(button_video_module_next, ">", {220, 220, 220, 255});
-
-        const size_t module_index = std::min(selected_visual_module, module_count > 0 ? module_count - 1 : 0);
+        const int grid_h = rect.h - 64;
 
         SDL_SetRenderDrawColor(renderer, 22, 28, 40, 255);
         SDL_Rect viewport{grid_x, grid_y, grid_w, grid_h};
         SDL_RenderFillRect(renderer, &viewport);
 
-        if (module_index == 3)
+        const auto &gpu_pixels = emulator.get_gpu_framebuffer();
+        if (!gpu_texture)
         {
-            const int cols = 32;
-            const int rows = 18;
-            const int cell_w = std::max(1, grid_w / cols);
-            const int cell_h = std::max(1, grid_h / rows);
-            const Uint64 elapsed_ms = SDL_GetTicks64() - animation_start_ticks;
-            const int phase = static_cast<int>((elapsed_ms / 80U) % static_cast<Uint64>(cols));
-
-            for (int y = 0; y < rows; ++y)
-            {
-                for (int x = 0; x < cols; ++x)
-                {
-                    const int pulse = (x + (y * 2) + phase) % cols;
-                    const Uint8 r = static_cast<Uint8>(16 + (pulse * 7));
-                    const Uint8 g = static_cast<Uint8>(32 + (pulse * 5));
-                    const Uint8 b = static_cast<Uint8>(64 + (pulse * 6));
-
-                    SDL_SetRenderDrawColor(renderer, r, g, b, 255);
-                    SDL_Rect cell{grid_x + (x * cell_w), grid_y + (y * cell_h), cell_w - 1, cell_h - 1};
-                    SDL_RenderFillRect(renderer, &cell);
-                }
-            }
-        }
-        else if (module_index == 2)
-        {
-            const auto &console_words = snapshot[module_index];
-            const size_t console_capacity = std::min<size_t>(512, console_words.size());
-            std::string text;
-            text.reserve(console_capacity);
-
-            for (size_t i = 0; i < console_capacity; ++i)
-            {
-                unsigned int ch = 0;
-                for (size_t bit = 0; bit < 8; ++bit)
-                {
-                    if (console_words[i].test(bit))
-                        ch |= (1U << static_cast<unsigned int>(bit));
-                }
-
-                if (ch == 0)
-                    text.push_back(' ');
-                else if (ch == 10 || ch == 13)
-                    text.push_back('\n');
-                else if (ch >= 32 && ch <= 126)
-                    text.push_back(static_cast<char>(ch));
-                else
-                    text.push_back(' ');
-            }
-
-            const int max_columns = std::max(1, (grid_w - 8) / 6);
-            const int max_rows = std::max(1, (grid_h - 8) / 12);
-            int x = grid_x + 4;
-            int y = grid_y + 4;
-            int current_col = 0;
-            int current_row = 0;
-
-            for (char c : text)
-            {
-                if (current_row >= max_rows)
-                    break;
-
-                if (c == '\n' || current_col >= max_columns)
-                {
-                    ++current_row;
-                    current_col = 0;
-                    x = grid_x + 4;
-                    y += 12;
-                    if (c == '\n')
-                        continue;
-                }
-
-                draw_text(x, y, std::string(1, c), 1, {180, 255, 180, 255});
-                x += 6;
-                ++current_col;
-            }
-        }
-        else
-        {
-            const int cols = 32;
-            const int rows = 16;
-            const int cell_w = std::max(1, grid_w / cols);
-            const int cell_h = std::max(1, grid_h / rows);
-            const auto &module_words = snapshot[module_index];
-
-            for (int y = 0; y < rows; ++y)
-            {
-                for (int x = 0; x < cols; ++x)
-                {
-                    const size_t index = static_cast<size_t>(y * cols + x);
-                    Uint8 r = 18;
-                    Uint8 g = 22;
-                    Uint8 b = 28;
-
-                    if (index < module_words.size())
-                    {
-                        unsigned int intensity = 0;
-                        for (size_t bit = 0; bit < 8; ++bit)
-                        {
-                            if (module_words[index].test(bit))
-                                intensity |= (1U << static_cast<unsigned int>(bit));
-                        }
-
-                        if (module_words[index].any())
-                        {
-                            const Uint8 scaled = static_cast<Uint8>(40 + (intensity % 216));
-                            r = static_cast<Uint8>(scaled / 2);
-                            g = static_cast<Uint8>(scaled / 3);
-                            b = scaled;
-                        }
-                    }
-
-                    SDL_SetRenderDrawColor(renderer, r, g, b, 255);
-                    SDL_Rect cell{grid_x + (x * cell_w), grid_y + (y * cell_h), cell_w - 1, cell_h - 1};
-                    SDL_RenderFillRect(renderer, &cell);
-                }
-            }
-        }
-        {
-            std::ostringstream title;
-            title << "MODULE VIEW M" << module_index << " " << module_name(module_index);
-            draw_text(rect.x + 12, rect.y + 10, title.str(), 2, {242, 246, 255, 255});
+            gpu_texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, gpu_logical_width, gpu_logical_height);
+            if (!gpu_texture)
+                throw std::runtime_error(std::string("SDL_CreateTexture failed: ") + SDL_GetError());
         }
 
+        if (!gpu_pixels.empty())
+            SDL_UpdateTexture(gpu_texture, nullptr, gpu_pixels.data(), gpu_logical_width * static_cast<int>(sizeof(Uint32)));
+
+        SDL_RenderCopy(renderer, gpu_texture, nullptr, &viewport);
+
+        draw_text(rect.x + 12, rect.y + 10, "GPU SCREEN", 2, {242, 246, 255, 255});
         int line_y = rect.y + rect.h - 44;
         for (const auto &line : overlay_lines)
         {
@@ -1546,7 +1622,7 @@ private:
         case 2:
             return "CONSOLE";
         case 3:
-            return "GPU";
+            return "GPU RAM 400x600";
         default:
             return "MODULE";
         }
@@ -1568,6 +1644,7 @@ private:
 
     SDL_Window *window = nullptr;
     SDL_Renderer *renderer = nullptr;
+    SDL_Texture *gpu_texture = nullptr;
 
     int window_width = 1280;
     int window_height = 720;
@@ -1613,11 +1690,11 @@ private:
     SDL_Rect button_menu_refresh{0, 0, 0, 0};
     SDL_Rect button_inspector_up{0, 0, 0, 0};
     SDL_Rect button_inspector_down{0, 0, 0, 0};
-    SDL_Rect button_video_module_prev{0, 0, 0, 0};
-    SDL_Rect button_video_module_next{0, 0, 0, 0};
-    size_t selected_visual_module = 3;
     size_t selected_memory_module = 1;
     size_t active_module_count = 4;
     int last_mouse_x = 0;
     int last_mouse_y = 0;
+    std::deque<std::string> console_lines;
+    bool console_visible = false;
+    SDL_Rect button_console_toggle{0, 0, 0, 0};
 };

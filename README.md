@@ -6,3 +6,7 @@ This is the base base library project for the Fiat128 Emulator. It contains the 
 
 ## Requirements (for compiling)
 - A x86 or x64 compiler
+
+## GPU ISA Spec
+
+See [GPU_ISA.md](GPU_ISA.md) for the current fixed GPU instruction-set proposal used by the emulator shader path.

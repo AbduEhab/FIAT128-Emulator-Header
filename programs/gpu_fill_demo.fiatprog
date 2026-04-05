@@ -1,31 +1,35 @@
-NAME GPU Fill Demo
-DESCRIPTION Writes a small pattern into GPU module 3 addresses, then halts.
+NAME GPU White Fill Demo
+DESCRIPTION Loads a real GPU shader into RAM3 and fills the screen with solid white.
 
-# Pattern words (low byte drives visible intensity in current renderer)
-WORD 0 0x00
-WORD 1 0x20
-WORD 2 0x40
-WORD 3 0x60
-WORD 4 0x80
-WORD 5 0xA0
-WORD 6 0xC0
-WORD 7 0xE0
+# ---------------------------------------------------------------------------
+# ROM-side constants that CPU copies into GPU RAM (M3)
+# ---------------------------------------------------------------------------
+# RAM3[0] = start/control byte (0xFF means "execute shader")
+WORD 0 0xFF
+# RAM3[1] = packed RGB color used by the shader (white)
+WORD 1 0xFFFFFF
+# RAM3[3..5] = shader bytecode words (LOAD constant, PIXEL_STORE, HALT)
+WORD 3 0x0000000100000000
+WORD 4 0x0000000000000002
+WORD 5 0x000000000000001F
 
-# Program
-INSTR 50 LDA R0 M0 0
-INSTR 49 STA R0 M3 0
-INSTR 48 LDA R0 M0 1
-INSTR 47 STA R0 M3 1
-INSTR 46 LDA R0 M0 2
-INSTR 45 STA R0 M3 2
-INSTR 44 LDA R0 M0 3
-INSTR 43 STA R0 M3 3
-INSTR 42 LDA R0 M0 4
-INSTR 41 STA R0 M3 4
-INSTR 40 LDA R0 M0 5
-INSTR 39 STA R0 M3 5
-INSTR 38 LDA R0 M0 6
-INSTR 37 STA R0 M3 6
-INSTR 36 LDA R0 M0 7
-INSTR 35 STA R0 M3 7
-INSTR 34 HLT R0 R0 R0
+# ---------------------------------------------------------------------------
+# CPU program: upload shader + args from ROM (M0) into GPU RAM (M3), then run
+# ---------------------------------------------------------------------------
+# Copy color constant into RAM3[1]
+INSTR 50 LDA R0 M0 1
+INSTR 49 STA R0 M3 1
+# Copy shader instruction 0 into RAM3[3]
+INSTR 48 LDA R0 M0 3
+INSTR 47 STA R0 M3 3
+# Copy shader instruction 1 into RAM3[4]
+INSTR 46 LDA R0 M0 4
+INSTR 45 STA R0 M3 4
+# Copy shader instruction 2 into RAM3[5]
+INSTR 44 LDA R0 M0 5
+INSTR 43 STA R0 M3 5
+# Write start byte to RAM3[0] to trigger GPU execution
+INSTR 42 LDA R0 M0 0
+INSTR 41 STA R0 M3 0
+# Stop CPU program; GPU continues until shader HALT
+INSTR 40 HLT R0 R0 R0

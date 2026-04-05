@@ -94,6 +94,46 @@ int main([[maybe_unused]] int, [[maybe_unused]] char **)
     renderer.set_selected_program_index(active_program_index);
     renderer.set_status_text(program_catalog[active_program_index].display_name);
 
+    auto update_console_from_m2 = [&](EmulatorType &emulator)
+    {
+        auto snapshot = emulator.get_memory_snapshot();
+
+        // M2 is module 2 (console IO)
+        if (snapshot.size() <= 2)
+            return;
+
+        const auto &m2_module = snapshot[2];
+
+        // Keep console rendering consistent with memory hex viewer char preview:
+        // one character per word from the low 8 bits.
+        std::string console_text;
+        console_text.reserve(m2_module.size());
+
+        for (size_t i = 0; i < m2_module.size(); ++i)
+        {
+            const auto &word = m2_module[i];
+
+            uint8_t ch = 0;
+            for (int bit = 0; bit < 8; ++bit)
+            {
+                if (word[static_cast<size_t>(bit)])
+                    ch |= static_cast<uint8_t>(1U << bit);
+            }
+
+            if (ch == 10 || ch == 13)
+                console_text.push_back('\n');
+            else if (ch == 0)
+                console_text.push_back(' ');
+            else if (ch >= 32 && ch <= 126)
+                console_text.push_back(static_cast<char>(ch));
+            else
+                console_text.push_back('.');
+        }
+
+        renderer.console_clear();
+        renderer.console_append_text(console_text);
+    };
+
     // Emulator.set_word(0, 0xFFFF00, 1);
     // Emulator.add_instruction(0, 0xFFFFFF - 1, FIAT128::InstructionType::ADD, FIAT128::RegisterIndex::R0, FIAT128::RegisterIndex::R0, FIAT128::RegisterIndex::R1);
 
@@ -110,6 +150,7 @@ int main([[maybe_unused]] int, [[maybe_unused]] char **)
             renderer.set_selected_program_index(active_program_index);
             Emulator = create_loaded_emulator(program_catalog[active_program_index]);
             renderer.set_status_text(program_catalog[active_program_index].display_name);
+            renderer.console_clear();
             break;
         case GuiRenderer::UiCommand::LoadProgram2:
             if (program_catalog.size() > 1)
@@ -118,6 +159,7 @@ int main([[maybe_unused]] int, [[maybe_unused]] char **)
                 renderer.set_selected_program_index(active_program_index);
                 Emulator = create_loaded_emulator(program_catalog[active_program_index]);
                 renderer.set_status_text(program_catalog[active_program_index].display_name);
+                renderer.console_clear();
             }
             break;
         case GuiRenderer::UiCommand::LoadProgram3:
@@ -127,6 +169,7 @@ int main([[maybe_unused]] int, [[maybe_unused]] char **)
                 renderer.set_selected_program_index(active_program_index);
                 Emulator = create_loaded_emulator(program_catalog[active_program_index]);
                 renderer.set_status_text(program_catalog[active_program_index].display_name);
+                renderer.console_clear();
             }
             break;
         case GuiRenderer::UiCommand::ReloadProgram:
@@ -134,6 +177,7 @@ int main([[maybe_unused]] int, [[maybe_unused]] char **)
             renderer.set_status_text(program_catalog[active_program_index].display_name);
             renderer.pause_execution();
             pending_steps = 0.0;
+            renderer.console_clear();
             break;
         case GuiRenderer::UiCommand::RunInitOnly:
         {
@@ -145,6 +189,7 @@ int main([[maybe_unused]] int, [[maybe_unused]] char **)
                 renderer.set_status_text(program_catalog[active_program_index].display_name + " [INIT READY]");
             else
                 renderer.set_status_text(program_catalog[active_program_index].display_name + " [INIT TIMEOUT]");
+            renderer.console_clear();
             break;
         }
         case GuiRenderer::UiCommand::LoadSelectedProgram:
@@ -165,15 +210,13 @@ int main([[maybe_unused]] int, [[maybe_unused]] char **)
                 renderer.set_status_text(selected->display_name);
                 renderer.pause_execution();
                 pending_steps = 0.0;
+                renderer.console_clear();
             }
             break;
         }
         case GuiRenderer::UiCommand::RefreshProgramList:
         {
             program_catalog = discover_program_entries(program_directory);
-            if (program_catalog.empty())
-                program_catalog = builtin_program_entries();
-
             if (active_program_index >= program_catalog.size())
                 active_program_index = 0;
 
@@ -181,6 +224,7 @@ int main([[maybe_unused]] int, [[maybe_unused]] char **)
             renderer.set_selected_program_index(active_program_index);
             Emulator = create_loaded_emulator(program_catalog[active_program_index]);
             renderer.set_status_text(program_catalog[active_program_index].display_name);
+            renderer.console_clear();
             break;
         }
         case GuiRenderer::UiCommand::None:
@@ -237,6 +281,7 @@ int main([[maybe_unused]] int, [[maybe_unused]] char **)
             }
         }
 
+        update_console_from_m2(*Emulator);
         renderer.draw_frame(*Emulator);
         std::this_thread::sleep_for(std::chrono::milliseconds(16));
         ++i;

@@ -280,7 +280,6 @@ namespace
         TinyEmu emu(64);
 
         ProgramDefinition program;
-        program.id = ProgramId::IdleLoop;
         program.name = "Tiny Five Instruction Program";
         program.description = "Five instruction regression for load and execution.";
         program.instructions = {
@@ -415,6 +414,34 @@ namespace
             detail.str()
         };
     }
+
+    auto test_gpu_white_fill_shader_runs_and_clears_start_bit() -> TestResult
+    {
+        Emu emu(10000);
+
+        emu.set_word_in_memory(3, 1, std::bitset<128>(0xFFFFFFULL));
+        emu.set_word_in_memory(3, 3, std::bitset<128>(0x0000000100000000ULL));
+        emu.set_word_in_memory(3, 4, std::bitset<128>(0x0000000000000002ULL));
+        emu.set_word_in_memory(3, 5, std::bitset<128>(0x000000000000001FULL));
+        emu.set_word_in_memory(3, 0, std::bitset<128>(0xFFULL));
+
+        emu.execute_gpu_shader();
+
+        const auto &framebuffer = emu.get_gpu_framebuffer();
+        const bool size_ok = framebuffer.size() == (400U * 600U);
+        const bool first_pixel_white = !framebuffer.empty() && framebuffer.front() == 0xFFFFFFFFU;
+        const bool center_pixel_white = framebuffer.size() > 120000 && framebuffer[120000] == 0xFFFFFFFFU;
+        const bool last_pixel_white = !framebuffer.empty() && framebuffer.back() == 0xFFFFFFFFU;
+        const bool control_cleared = (emu.bus.read(true, 0, 3, 0).to_ulong() == 0);
+
+        const bool ok = size_ok && first_pixel_white && center_pixel_white && last_pixel_white && control_cleared;
+
+        return {
+            "gpu_white_fill_shader_runs_and_clears_start_bit",
+            ok,
+            "Expected the GPU shader to fill the framebuffer white and clear RAM3 byte 0 after execution."
+        };
+    }
 }
 
 int main()
@@ -433,6 +460,7 @@ int main()
     results.push_back(test_tiny_five_instruction_program_runs_without_xxx());
     results.push_back(test_add_does_not_touch_module_memory());
     results.push_back(test_memory_instruction_uses_module_and_address());
+    results.push_back(test_gpu_white_fill_shader_runs_and_clears_start_bit());
 
     int failures = 0;
     for (const auto &r : results)
